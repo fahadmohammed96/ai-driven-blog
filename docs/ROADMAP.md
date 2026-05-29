@@ -11,7 +11,7 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 
 - [x] **Spostare il repo fuori da OneDrive** → Windows nativo `C:\progetti-ai\blogs-manager`, WSL2 rimandato (**ADR-0011**; DEBT-001 `PAID`). **Accettazione:** percorso non sincronizzato ✓; la fluidità Docker/file-watch si conferma al task *docker-compose dev*.
 - [x] **Scaffold monorepo** (pnpm + Turborepo; `apps/api`, `apps/web`, `packages/*`). **Accettazione:** `pnpm install` ok; build/test di entrambe le app girano da root.
-- [ ] **Backend base NestJS** con struttura `platform/modules/verticals` e confini di modulo imposti. **Accettazione:** un test fallisce se un modulo importa gli interni di un altro.
+- [x] **Backend base NestJS** con struttura `platform/modules/verticals` e confini di modulo imposti. **Accettazione:** un test fallisce se un modulo importa gli interni di un altro.
 - [ ] **Postgres + Drizzle + migrazioni**; modello dati *tenant-aware* (`tenant_id`) con **RLS** abilitata. **Accettazione:** test d'integrazione (Testcontainers) prova che una query non vede dati di un altro tenant.
 - [ ] **docker-compose dev** (Postgres + MinIO + Mailhog). **Accettazione:** `docker compose up` espone i servizi e l'app vi si connette.
 - [ ] **CI** (lint + typecheck + unit + integration + E2E smoke; merge bloccato se rosso). **Accettazione:** una PR con un test rosso non è mergeabile.

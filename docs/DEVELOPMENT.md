@@ -3,7 +3,7 @@
 Nato da due timori: **context rot tra i task** e **test "solo empirici"**. Leva unica per entrambi: **slice verticali sottili, a confine di modulo, ognuna ancorata a un test**.
 
 ## 1. Topologia & layout
-- **Monolite modulare + plugin** (i vertical pack sono plugin). Confini di modulo **imposti dal tooling**: un modulo parla agli altri solo via contratto, non importa gli interni.
+- **Monolite modulare + plugin** (i vertical pack sono plugin). Confini di modulo **imposti dal tooling**: un modulo parla agli altri solo via contratto, non importa gli interni. *Convenzione*: ogni modulo espone un barrel `index.ts`; i cross-import passano **solo** dal barrel; un **arch-test** (`apps/api/src/arch/boundaries.test.ts`) fallisce sulle violazioni.
 - Servizi **satellite solo sotto pressione** (worker pool, redirector affiliati `/go/`, connettori ballerini).
 - **Monorepo** con FE/BE separati:
 ```
