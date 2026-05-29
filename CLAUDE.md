@@ -7,6 +7,7 @@
 ## Stato attuale
 - **Fase 0 — Fondamenta: COMPLETA.** Monorepo pnpm+Turborepo: `apps/api` (NestJS, `platform/modules/verticals` con confini da arch-test), `apps/web` (Next.js), `packages/{contracts,config}`. Inclusi: Postgres+Drizzle con **RLS** su `tenant_id`; pipeline **AI** (brand voice + RAG su pgvector); **auth** minimale (login fondatore, [ADR-0010](docs/adr/0010-auth.md)). Lint/typecheck/unit/integration(Docker)/E2E(Playwright) verdi; **CI** GitHub Actions su ogni PR.
 - **Prossimo**: **Fase 1 — dall'itinerario all'articolo** (vedi ROADMAP).
+- **Ambiente dev**: target **WSL2/Linux** ([ADR-0012](docs/adr/0012-dev-env-wsl2.md)) — esegui `scripts/setup-wsl.sh` dentro Ubuntu (clone nel FS WSL). Il checkout Windows `C:\` è legacy finché non migrato.
 - **Dev stack**: `docker/compose.yaml` (Postgres + MinIO + Mailhog) → `pnpm stack:up` · `stack:check` · `stack:down`.
 - **Stack deciso**: TypeScript full-stack — NestJS · Next.js · Postgres + Drizzle · pg-boss.
 - **Aperti**: hosting (al deploy).
