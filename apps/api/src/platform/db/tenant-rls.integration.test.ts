@@ -24,7 +24,7 @@ let appPool: Pool;
 let db: Db;
 
 beforeAll(async () => {
-  container = await new PostgreSqlContainer("postgres:16-alpine").start();
+  container = await new PostgreSqlContainer("pgvector/pgvector:pg16").start();
   adminPool = new Pool({ connectionString: container.getConnectionUri() });
 
   // Apply migrations in lexicographic order.
