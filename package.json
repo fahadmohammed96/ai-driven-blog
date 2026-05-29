@@ -10,7 +10,10 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
-    "dev": "turbo run dev"
+    "dev": "turbo run dev",
+    "stack:up": "docker compose -f docker/compose.yaml up -d",
+    "stack:down": "docker compose -f docker/compose.yaml down",
+    "stack:check": "node apps/api/scripts/check-stack.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

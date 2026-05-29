@@ -6,6 +6,7 @@
 
 ## Stato attuale
 - **Fase: 0 — Fondamenta** (in corso). Monorepo pnpm+Turborepo: `apps/api` (NestJS; `platform/modules/verticals` con confini da arch-test; Postgres+Drizzle, **RLS** su `tenant_id` provata da test Testcontainers), `apps/web` (Next.js), `packages/{contracts,config}`. Unit/typecheck verdi da root; integration test via Docker.
+- **Dev stack**: `docker/compose.yaml` (Postgres + MinIO + Mailhog) → `pnpm stack:up` · `stack:check` · `stack:down`.
 - **Stack deciso**: TypeScript full-stack — NestJS · Next.js · Postgres + Drizzle · pg-boss.
 - **Aperti**: auth (ADR dedicato) · hosting (al deploy).
 

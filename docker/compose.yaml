@@ -1,0 +1,42 @@
+name: blogs-manager-dev
+
+# Dev stack: Postgres (pgvector for AI/RAG), MinIO (S3), Mailhog (SMTP).
+# Up:   pnpm stack:up      Down: pnpm stack:down      Check: pnpm stack:check
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: blogs
+      POSTGRES_PASSWORD: blogs
+      POSTGRES_DB: blogs
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blogs -d blogs"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  mailhog:
+    image: mailhog/mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+volumes:
+  pgdata:
+  miniodata:
