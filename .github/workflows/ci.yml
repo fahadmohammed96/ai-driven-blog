@@ -1,0 +1,49 @@
+name: CI
+
+# Punto di imposizione (DEVELOPMENT.md §8): il job fallisce su qualsiasi rosso.
+# NB: per rendere una PR rossa NON mergeabile occorre abilitare la branch
+# protection su `main` richiedendo questo check (vedi TECH_DEBT DEBT-003).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: lint - typecheck - test - integration - e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit & architecture tests
+        run: pnpm test
+
+      - name: Integration tests (Testcontainers)
+        run: pnpm --filter @blogs/api test:integration
+
+      - name: Install Playwright browser
+        run: pnpm --filter @blogs/web exec playwright install --with-deps chromium
+
+      - name: E2E smoke
+        run: pnpm --filter @blogs/web e2e
