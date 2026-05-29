@@ -5,7 +5,7 @@
 > Principio guida: **l'AI propone, l'umano conferma**.
 
 ## Stato attuale
-- **Fase: 0 — Fondamenta** (nessun codice ancora; setup in corso).
+- **Fase: 0 — Fondamenta** (in corso). Scaffold monorepo fatto (pnpm + Turborepo): `apps/api` (NestJS), `apps/web` (Next.js), `packages/{contracts,config}`; build/test/typecheck verdi da root.
 - **Stack deciso**: TypeScript full-stack — NestJS · Next.js · Postgres + Drizzle · pg-boss.
 - **Aperti**: auth (ADR dedicato) · hosting (al deploy).
 
