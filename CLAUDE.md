@@ -11,7 +11,7 @@
 - **Dev stack**: `docker/compose.yaml` (Postgres + MinIO + Mailhog) → `pnpm stack:up` · `stack:check` · `stack:down`.
 - **Stack deciso**: TypeScript full-stack — NestJS · Next.js · Postgres + Drizzle · pg-boss.
 - **Aperti**: hosting (al deploy).
-- **Debito noto** (vedi [TECH_DEBT](docs/TECH_DEBT.md)): DEBT-002 (drizzle-kit), DEBT-003 (branch protection), DEBT-004 (test HTTP Nest).
+- **Debito noto**: nessuno aperto — DEBT-001/002/003/004 tutti **PAID** (vedi [TECH_DEBT](docs/TECH_DEBT.md)).
 
 ## Fonti di verità — LEGGI PRIMA DI LAVORARE
 Questi documenti del repo sono **canonici** (versionati, condivisi). Non fidarti della chat.
