@@ -39,6 +39,9 @@ jobs:
       - name: Unit & architecture tests
         run: pnpm test
 
+      - name: Nest HTTP tests (swc)
+        run: pnpm --filter @blogs/api test:http
+
       - name: Integration tests (Testcontainers)
         run: pnpm --filter @blogs/api test:integration
 

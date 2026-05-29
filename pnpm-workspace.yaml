@@ -3,6 +3,7 @@ packages:
   - "packages/*"
 allowBuilds:
   '@nestjs/core': true
+  '@swc/core': true
   cpu-features: false
   esbuild: true
   protobufjs: false
