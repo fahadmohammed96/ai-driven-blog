@@ -1,0 +1,21 @@
+# ADR — Architecture Decision Records
+
+Le **decisioni** e il loro *perché* (la storia immutabile). Lo **stato corrente** sta in [PRODUCT.md](../PRODUCT.md) / [DEVELOPMENT.md](../DEVELOPMENT.md).
+
+Questo file è il **log delle decisioni**: una riga per decisione è sufficiente. Quando una decisione richiede approfondimento, si "promuove" a file dedicato `NNNN-titolo.md` con: *Contesto → Decisione → Conseguenze → Alternative scartate*. Le ADR non si riscrivono: se cambiano, si aggiunge una nuova ADR che *supersede* la vecchia.
+
+Stato: `Accepted` · `Proposed` · `Superseded`.
+
+| ID | Decisione | Stato | Perché (sintesi) | Reversibilità |
+|----|-----------|-------|------------------|---------------|
+| 0001 | **Monolite modulare + plugin** (no microservizi al giorno 1; satelliti solo sotto pressione) | Accepted | Velocità per dev solo; isolamento via confini imposti + worker async; i microservizi rallentano il bug-fixing in solitaria | media |
+| 0002 | **Multi-tenancy = Postgres RLS** su `tenant_id`; cucitura ora, hardening al tenant #2 | Accepted | Isolamento robusto senza over-engineering in fase dogfooding (n=1) | bassa |
+| 0003 | **Stack = TypeScript full-stack** (NestJS · Next.js · Drizzle · pg-boss) | Accepted | Un linguaggio FE+BE, tipi condivisi, miglior supporto agenti AI, workload I/O-bound | framework: bassa |
+| 0004 | **CMS ibrido + modello canonico a blocchi** (JSON portabile, non HTML); adapter (WordPress) adapter-ready | Accepted | L'AI ragiona su struttura; un solo modello per tutti i canali; round-trip esterni = mappatura | media |
+| 0005 | **Core orizzontale + vertical pack** (per QUALSIASI blog; travel = #1) | Accepted | Profondità (travel/dogfooding) senza precludere la genericità; evita il "generic trap" | media |
+| 0006 | **Integrazioni native, sequenziate** un canale alla volta (no aggregatori) | Accepted | Controllo + margine; email "native" = API provider (SES/Postmark), non SMTP proprio | media |
+| 0007 | **Workflow dev**: TDD doppio-loop · test reali (Testcontainers/Playwright/mutation) · ADR+CLAUDE.md vs context rot · regola anti-debito | Accepted | Gestire i due rischi: context rot e test empirici | n/a |
+| 0008 | **Servizi viaggio via partner operator/host agency** (no tour operator/GDS proprio al giorno 1) | Accepted | Esperienza "360" per il cliente senza il peso regolatorio (Codice del Turismo) e l'inventory; moat = curation+fiducia | alta |
+| 0009 | **Coda = pg-boss** (su Postgres) prima di Redis/BullMQ | Accepted | Meno infra all'inizio; si passa a BullMQ sotto pressione | alta |
+| 0010 | **Auth** (multi-tenant) | **Proposed** | Da decidere: self-hosted TS con org (es. Better Auth, dati in Postgres → RLS) vs gestito (es. Clerk). Per ora minimale (n=1) | — |
+| 0011 | **Ambiente dev = Windows nativo (`C:\`)**; WSL2 rimandato | Accepted | Uscita da OneDrive (DEBT-001) risolve sync/lock; per dogfooding n=1 il path NTFS nativo basta; il vantaggio WSL2 (I/O Docker/file-watch) si valuta se diventa doloroso | alta |

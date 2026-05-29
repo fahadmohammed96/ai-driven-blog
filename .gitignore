@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# Env & secrets (mai committare segreti reali)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+*-debug.log*
+
+# Test & coverage
+coverage/
+test-results/
+playwright-report/
+
+# OS & editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Claude Code (impostazioni locali, non condivise)
+.claude/settings.local.json
