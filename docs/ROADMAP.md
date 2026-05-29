@@ -16,7 +16,7 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 - [x] **docker-compose dev** (Postgres + MinIO + Mailhog). **Accettazione:** `docker compose up` espone i servizi e l'app vi si connette.
 - [x] **CI** (lint + typecheck + unit + integration + E2E smoke; merge bloccato se rosso). **Accettazione:** una PR con un test rosso non è mergeabile. *(Workflow `.github/workflows/ci.yml` pronto e verde in locale; **branch protection** su `main` da abilitare lato GitHub per bloccare davvero il merge — vedi DEBT-003.)*
 - [x] **Pipeline AI minima** (Anthropic SDK + brand voice + RAG su pgvector). **Accettazione:** dato un brief, genera una bozza nello stile configurato (test su esito osservabile). *(RAG provato su pgvector reale; chiamata LLM reale via `ANTHROPIC_API_KEY`, fittizia al confine nei test.)*
-- [ ] **ADR auth** + scelta. **Accettazione:** ADR scritto; auth minimale funzionante (login del fondatore).
+- [x] **ADR auth** + scelta ([ADR-0010](adr/0010-auth.md): self-hosted TS, identità in Postgres). **Accettazione:** ADR scritto; auth minimale funzionante (login del fondatore) — verificato via HTTP (login → JWT, `/auth/me` protetto, 401 su credenziali errate / token mancante).
 
 ## Fase 1 — Il cuneo: dall'itinerario all'articolo
 *Obiettivo: il valore #1 per il fondatore.*

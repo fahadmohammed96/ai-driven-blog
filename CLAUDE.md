@@ -5,10 +5,12 @@
 > Principio guida: **l'AI propone, l'umano conferma**.
 
 ## Stato attuale
-- **Fase: 0 — Fondamenta** (in corso). Monorepo pnpm+Turborepo: `apps/api` (NestJS; `platform/modules/verticals` con confini da arch-test; Postgres+Drizzle con **RLS** su `tenant_id`, e pipeline **AI** (brand voice + RAG su pgvector) — tutto provato da test Testcontainers), `apps/web` (Next.js), `packages/{contracts,config}`. Lint/typecheck/unit verdi da root; integration (Docker) + E2E (Playwright) verdi; **CI** GitHub Actions su ogni PR.
+- **Fase 0 — Fondamenta: COMPLETA.** Monorepo pnpm+Turborepo: `apps/api` (NestJS, `platform/modules/verticals` con confini da arch-test), `apps/web` (Next.js), `packages/{contracts,config}`. Inclusi: Postgres+Drizzle con **RLS** su `tenant_id`; pipeline **AI** (brand voice + RAG su pgvector); **auth** minimale (login fondatore, [ADR-0010](docs/adr/0010-auth.md)). Lint/typecheck/unit/integration(Docker)/E2E(Playwright) verdi; **CI** GitHub Actions su ogni PR.
+- **Prossimo**: **Fase 1 — dall'itinerario all'articolo** (vedi ROADMAP).
 - **Dev stack**: `docker/compose.yaml` (Postgres + MinIO + Mailhog) → `pnpm stack:up` · `stack:check` · `stack:down`.
 - **Stack deciso**: TypeScript full-stack — NestJS · Next.js · Postgres + Drizzle · pg-boss.
-- **Aperti**: auth (ADR dedicato) · hosting (al deploy).
+- **Aperti**: hosting (al deploy).
+- **Debito noto** (vedi [TECH_DEBT](docs/TECH_DEBT.md)): DEBT-002 (drizzle-kit), DEBT-003 (branch protection), DEBT-004 (test HTTP Nest).
 
 ## Fonti di verità — LEGGI PRIMA DI LAVORARE
 Questi documenti del repo sono **canonici** (versionati, condivisi). Non fidarti della chat.
