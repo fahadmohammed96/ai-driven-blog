@@ -25,3 +25,8 @@ la policy già esistente (la policy vale per tutte le colonne, incl. le nuove).
 Tabelle `media_assets` (asset + varianti jsonb + `taken_on`/`lat`/`lng` da EXIF) e
 `itinerary_stop_photos` (link tappa↔foto, dominio travel). Generato da drizzle-kit;
 **RLS + policy `tenant_isolation` su entrambe aggiunte a mano** in coda.
+
+## `0003_*.sql` — published_at (Fase 1)
+Colonna `content_items.published_at` (nullable) per la macchina a stati di pubblicazione
+(impostata **una sola volta** al primo `published` → publish idempotente). Nessuna RLS
+aggiuntiva: la policy di `content_items` copre anche la nuova colonna.

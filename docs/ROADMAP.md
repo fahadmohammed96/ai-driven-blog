@@ -24,7 +24,7 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 - [x] **Vertical travel: tipo `Itinerary`** (tappe, luoghi, date, geo) sul modello canonico. **Accettazione:** si crea/edita un itinerario e si serializza in blocchi.
 - [x] **Media/DAM**: upload diretto a storage, varianti (sharp), EXIF/geo (exifr), aggancio foto→tappe. **Accettazione:** una foto caricata si auto-organizza per luogo/data.
 - [x] **Generazione articolo** da itinerario + note + foto, nella voce dell'utente. **Accettazione:** dato un itinerario reale, produce una bozza con le foto incastrate; **misuratore di autenticità** segnala dove aggiungere esperienza.
-- [ ] **Macchina a stati di pubblicazione** (bozza→proposta→revisione→approvato→pubblicato). **Accettazione:** un articolo percorre gli stati; la pubblicazione è idempotente.
+- [x] **Macchina a stati di pubblicazione** (bozza→proposta→revisione→approvato→pubblicato). **Accettazione:** un articolo percorre gli stati; la pubblicazione è idempotente.
 - [ ] **E2E**: *itinerario + foto → articolo pubblicato*. **Accettazione:** journey verde in CI.
 
 ## Fase 2 — Distribuzione

@@ -35,6 +35,8 @@ export const contentItems = pgTable("content_items", {
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  // Set once, when the item first reaches 'published' (idempotent publish).
+  publishedAt: timestamp("published_at", { withTimezone: true }),
 });
 
 /** Travel vertical: the structured stops of an itinerary content item. */

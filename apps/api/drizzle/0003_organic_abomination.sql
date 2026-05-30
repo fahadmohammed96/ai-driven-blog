@@ -1,0 +1,1 @@
+ALTER TABLE "content_items" ADD COLUMN "published_at" timestamp with time zone;

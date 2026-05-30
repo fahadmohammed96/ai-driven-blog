@@ -5,7 +5,16 @@ export {
   insertContentItem,
   getContentItem,
   updateContentItem,
+  transitionContentItem,
+  applyTransition,
+  publishContentItem,
+  ContentNotFoundError,
   type ContentType,
   type ContentItemRow,
   type NewContentItem,
 } from "./content.repo";
+export {
+  nextStatus,
+  InvalidTransitionError,
+  type PublicationEvent,
+} from "./state-machine";
