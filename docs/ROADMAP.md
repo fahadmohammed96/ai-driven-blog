@@ -40,9 +40,9 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 *Obiettivo: portare la distribuzione (motore già pronto e verde in Fase 2) sotto il principio "l'umano conferma", con journey E2E. Verificabile **ora** con connettori **stub** al confine (come l'LLM in Fase 1) — niente sistemi esterni reali.*
 
 - [x] **Slice 1 — Gate di approvazione (human-in-the-loop)**: UI `/studio` "Distribuzione" → repurpose articolo → **approva/rifiuta** i post per canale prima che escano (transizione `draft→approved/rejected` idempotente; endpoint + gate UI). **Accettazione:** **E2E** *articolo pubblicato → repurpose → approva* verde in CI (connector stub al confine). ✓
-- [ ] **Slice 2 — UI newsletter**: gestione iscritti/segmenti + trigger dell'invio segmentato. **Accettazione:** E2E che invia a un segmento (Mailhog) e ne mostra l'esito.
+- [x] **Slice 2 — UI newsletter**: pagina `/newsletter` — iscrizione **double opt-in** (GDPR) + invio segmentato per tema. **Accettazione:** E2E *subscribe → conferma (token da Mailhog) → invio segmentato → esito* verde in CI. ✓
 
-> **Fuori da questo task** (resta su **DEBT-008**, trigger *primo canale reale*): il consent-flow **OAuth per collegare un canale reale**. Qui i connettori sono stub al confine.
+> **Fase 2.5 COMPLETA.** Entrambi gli slice verdi in CI (PR #3 + #4). Il consent-flow **OAuth per collegare un canale reale** resta su **DEBT-008** (trigger: *primo canale reale*) — fuori da questo task: qui i connettori sono stub al confine.
 
 ## Fase 3 — Monetizzazione & servizi
 - [ ] **Hub affiliazioni** + **redirector `/go/`** + tracking click. **Accettazione:** un click passa dal redirector e viene contato per link/articolo/canale.
