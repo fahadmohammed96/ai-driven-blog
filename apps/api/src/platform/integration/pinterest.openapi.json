@@ -1,0 +1,94 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Pinterest channel contract (subset)",
+    "version": "5.0.0",
+    "description": "The slice of the Pinterest API the Integration Gateway depends on: OAuth token refresh and create-pin. Source of truth for the connector contract test."
+  },
+  "components": {
+    "securitySchemes": {
+      "bearer": { "type": "http", "scheme": "bearer" }
+    }
+  },
+  "paths": {
+    "/oauth/token": {
+      "post": {
+        "summary": "Refresh an access token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["grant_type", "refresh_token"],
+                "properties": {
+                  "grant_type": { "type": "string", "enum": ["refresh_token"] },
+                  "refresh_token": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A fresh token set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["access_token", "expires_in"],
+                  "properties": {
+                    "access_token": { "type": "string" },
+                    "refresh_token": { "type": "string" },
+                    "expires_in": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unknown or revoked refresh token" }
+        }
+      }
+    },
+    "/pins": {
+      "post": {
+        "summary": "Create a pin",
+        "security": [{ "bearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["board_id", "title", "description", "media_source"],
+                "properties": {
+                  "board_id": { "type": "string" },
+                  "title": { "type": "string", "maxLength": 100 },
+                  "description": { "type": "string", "maxLength": 500 },
+                  "media_source": { "type": "object" },
+                  "link": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pin created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id"],
+                  "properties": { "id": { "type": "string" } }
+                }
+              }
+            }
+          },
+          "401": { "description": "Missing or invalid access token" },
+          "429": { "description": "Rate limited" }
+        }
+      }
+    }
+  }
+}

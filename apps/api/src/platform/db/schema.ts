@@ -8,8 +8,9 @@ import {
   integer,
   doublePrecision,
   date,
+  unique,
 } from "drizzle-orm/pg-core";
-import type { Block } from "@blogs/contracts";
+import type { Block, ChannelPost } from "@blogs/contracts";
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -93,6 +94,87 @@ export const itineraryStopPhotos = pgTable("itinerary_stop_photos", {
     .references(() => mediaAssets.id)
     .unique(),
 });
+
+/**
+ * Distribution (Fase 2): a channel-adapted projection of a source article,
+ * tenant-scoped. `payload` is the validated ChannelPost for that channel.
+ */
+export const channelPosts = pgTable("channel_posts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  contentItemId: uuid("content_item_id")
+    .notNull()
+    .references(() => contentItems.id),
+  channel: text("channel").notNull(),
+  status: text("status").notNull().default("draft"),
+  payload: jsonb("payload").$type<ChannelPost>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * Newsletter (Fase 2): a subscriber under GDPR double opt-in. `requestedAt` is
+ * the consent request, `confirmedAt` the explicit confirmation (audit trail).
+ * `confirmToken` validates the confirmation link. Tenant-scoped by RLS.
+ */
+export const subscribers = pgTable(
+  "subscribers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    email: text("email").notNull(),
+    status: text("status").notNull().default("pending"),
+    confirmToken: text("confirm_token").notNull(),
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("subscribers_tenant_email_unique").on(t.tenantId, t.email)],
+);
+
+/** A subscriber's opt-in to a theme (segmentation key). Tenant-scoped by RLS. */
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    subscriberId: uuid("subscriber_id")
+      .notNull()
+      .references(() => subscribers.id),
+    theme: text("theme").notNull(),
+  },
+  (t) => [unique("subscriptions_subscriber_theme_unique").on(t.subscriberId, t.theme)],
+);
+
+/**
+ * Integration Gateway (Fase 2): a connector's OAuth token set, tenant-scoped.
+ * `accessToken`/`refreshToken` are stored **sealed** (AES-256-GCM); RLS isolates
+ * per tenant (PRODUCT: per-tenant secrets encrypted).
+ */
+export const connectorCredentials = pgTable(
+  "connector_credentials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    connector: text("connector").notNull(),
+    accessToken: text("access_token").notNull(),
+    refreshToken: text("refresh_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("connector_credentials_tenant_connector_unique").on(t.tenantId, t.connector)],
+);
 
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),

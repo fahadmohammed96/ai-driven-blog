@@ -38,6 +38,10 @@ const APP_RW_TABLES = [
   "media_assets",
   "itinerary_stop_photos",
   "content_embeddings",
+  "channel_posts",
+  "subscribers",
+  "subscriptions",
+  "connector_credentials",
 ];
 
 /**
