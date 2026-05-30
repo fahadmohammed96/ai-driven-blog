@@ -117,4 +117,39 @@ describe("social HTTP", () => {
       .send({ channels: ["pinterest"] })
       .expect(422);
   });
+
+  it("approves a repurposed post (human-in-the-loop gate), idempotently", async () => {
+    const id = await seedArticle(WITH_IMAGE);
+    const server = app.getHttpServer();
+
+    const res = await request(server)
+      .post(`/articles/${id}/repurpose`)
+      .send({ channels: ["instagram"] })
+      .expect(201);
+    const postId = res.body.posts[0].id as string;
+    expect(res.body.posts[0].status).toBe("draft");
+
+    const approved = await request(server).post(`/articles/${id}/posts/${postId}/approve`).expect(201);
+    expect(approved.body.post.status).toBe("approved");
+
+    // re-approve is idempotent
+    await request(server).post(`/articles/${id}/posts/${postId}/approve`).expect(201);
+
+    // unknown post → 404
+    await request(server)
+      .post(`/articles/${id}/posts/77777777-7777-7777-7777-777777777777/approve`)
+      .expect(404);
+  });
+
+  it("refuses to reject an already-approved post (409)", async () => {
+    const id = await seedArticle(WITH_IMAGE);
+    const server = app.getHttpServer();
+    const res = await request(server)
+      .post(`/articles/${id}/repurpose`)
+      .send({ channels: ["instagram"] })
+      .expect(201);
+    const postId = res.body.posts[0].id as string;
+    await request(server).post(`/articles/${id}/posts/${postId}/approve`).expect(201);
+    await request(server).post(`/articles/${id}/posts/${postId}/reject`).expect(409);
+  });
 });

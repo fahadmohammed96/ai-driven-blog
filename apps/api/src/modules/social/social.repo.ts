@@ -29,3 +29,23 @@ export function listChannelPosts(tx: Tx, contentItemId: string): Promise<Channel
     .where(eq(channelPosts.contentItemId, contentItemId))
     .orderBy(desc(channelPosts.createdAt));
 }
+
+/** Fetch a single channel post by id (RLS-scoped). */
+export async function getChannelPostById(tx: Tx, id: string): Promise<ChannelPostRow | undefined> {
+  const [row] = await tx.select().from(channelPosts).where(eq(channelPosts.id, id)).limit(1);
+  return row as ChannelPostRow | undefined;
+}
+
+/** Persist a new approval status on a channel post; returns the updated row. */
+export async function setChannelPostStatus(
+  tx: Tx,
+  id: string,
+  status: string,
+): Promise<ChannelPostRow | undefined> {
+  const [row] = await tx
+    .update(channelPosts)
+    .set({ status })
+    .where(eq(channelPosts.id, id))
+    .returning();
+  return row as ChannelPostRow | undefined;
+}

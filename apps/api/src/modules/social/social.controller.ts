@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Inject,
@@ -15,7 +16,14 @@ import type { Db } from "../../platform/db/client";
 import { TenancyService } from "../tenancy";
 import { ContentNotFoundError } from "../content";
 import { ChannelRequiresImageError } from "./repurpose";
-import { repurposeArticle, getChannelPosts, NotAnArticleError } from "./distribution";
+import {
+  repurposeArticle,
+  getChannelPosts,
+  setPostApproval,
+  NotAnArticleError,
+  ChannelPostNotFoundError,
+} from "./distribution";
+import { InvalidPostTransitionError, type PostAction } from "./approval";
 
 interface ChannelPostView {
   id: string;
@@ -68,6 +76,28 @@ export class SocialController {
   async list(@Param("id") id: string): Promise<{ posts: ChannelPostView[] }> {
     const rows = await getChannelPosts(this.db, this.tenantId, id);
     return { posts: rows.map(toView) };
+  }
+
+  @Post(":id/posts/:postId/approve")
+  approve(@Param("postId") postId: string): Promise<{ post: ChannelPostView }> {
+    return this.settle(postId, "approve");
+  }
+
+  @Post(":id/posts/:postId/reject")
+  reject(@Param("postId") postId: string): Promise<{ post: ChannelPostView }> {
+    return this.settle(postId, "reject");
+  }
+
+  /** Human-in-the-loop gate: approve/reject a repurposed post before it can go out. */
+  private async settle(postId: string, action: PostAction): Promise<{ post: ChannelPostView }> {
+    try {
+      const row = await setPostApproval(this.db, this.tenantId, postId, action);
+      return { post: toView(row) };
+    } catch (err) {
+      if (err instanceof ChannelPostNotFoundError) throw new NotFoundException();
+      if (err instanceof InvalidPostTransitionError) throw new ConflictException(err.message);
+      throw err;
+    }
   }
 }
 

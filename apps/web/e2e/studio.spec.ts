@@ -24,4 +24,10 @@ test("itinerary + photo → published article", async ({ page }) => {
   // 4) publish → status reaches "published"
   await page.getByTestId("publish").click();
   await expect(page.getByTestId("published")).toHaveText(/published/);
+
+  // 5) distribution (Fase 2.5): repurpose → the human approves a post before it can go out
+  await page.getByTestId("repurpose").click();
+  await expect(page.getByTestId("status-instagram")).toHaveText("draft");
+  await page.getByTestId("approve-instagram").click();
+  await expect(page.getByTestId("status-instagram")).toHaveText("approved");
 });
