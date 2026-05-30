@@ -19,6 +19,12 @@ interface Article {
   authenticity: { score: number; flags: { suggestion: string }[] };
 }
 
+interface ChannelPostView {
+  id: string;
+  channel: string;
+  status: string;
+}
+
 const DEFAULT_STOPS = [
   { place: "Tokyo", startDate: "2026-04-01", endDate: "2026-04-04" },
   { place: "Kyoto", startDate: "2026-04-05", endDate: "2026-04-07" },
@@ -31,6 +37,7 @@ export default function Studio() {
   const [photoCount, setPhotoCount] = useState(0);
   const [article, setArticle] = useState<Article | null>(null);
   const [published, setPublished] = useState<{ status: string } | null>(null);
+  const [posts, setPosts] = useState<ChannelPostView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -72,6 +79,28 @@ export default function Studio() {
     const res = await fetch(`${API}/articles/${article.articleId}/publish`, { method: "POST" });
     if (!res.ok) return setError("Pubblicazione fallita");
     setPublished(await res.json());
+  }
+
+  async function repurpose() {
+    if (!article) return;
+    setError(null);
+    const res = await fetch(`${API}/articles/${article.articleId}/repurpose`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ channels: ["instagram", "x"] }),
+    });
+    if (!res.ok) return setError("Repurpose fallito");
+    setPosts((await res.json()).posts);
+  }
+
+  async function approve(postId: string) {
+    if (!article) return;
+    const res = await fetch(`${API}/articles/${article.articleId}/posts/${postId}/approve`, {
+      method: "POST",
+    });
+    if (!res.ok) return setError("Approvazione fallita");
+    const updated: ChannelPostView = (await res.json()).post;
+    setPosts((ps) => ps?.map((p) => (p.id === updated.id ? { ...p, status: updated.status } : p)) ?? null);
   }
 
   return (
@@ -158,6 +187,31 @@ export default function Studio() {
           <h2>4. Pubblica</h2>
           <button data-testid="publish" onClick={publish}>Pubblica</button>
           {published && <p data-testid="published">Stato: {published.status}</p>}
+        </section>
+      )}
+
+      {published && (
+        <section>
+          <h2>5. Distribuzione</h2>
+          <p>L&apos;AI propone i post per canale; tu approvi prima che escano.</p>
+          <button data-testid="repurpose" onClick={repurpose}>Genera post social</button>
+          {posts && (
+            <ul data-testid="channel-posts">
+              {posts.map((p) => (
+                <li key={p.id} data-testid={`post-${p.channel}`}>
+                  <strong>{p.channel}</strong> —{" "}
+                  <span data-testid={`status-${p.channel}`}>{p.status}</span>{" "}
+                  <button
+                    data-testid={`approve-${p.channel}`}
+                    onClick={() => approve(p.id)}
+                    disabled={p.status === "approved"}
+                  >
+                    Approva
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
     </main>

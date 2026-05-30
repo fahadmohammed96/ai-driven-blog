@@ -36,6 +36,14 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 
 > **Fase 2 COMPLETA.** Debt-gate: nessun debito *scaduto*. Nuove voci registrate (DEBT-006…008) hanno trigger *al secondo connettore / prima del primo invio o canale reale*, non ancora dovuti. Si può aprire la Fase 3.
 
+## Fase 2.5 — UI distribuzione + E2E (follow-up Fase 2)
+*Obiettivo: portare la distribuzione (motore già pronto e verde in Fase 2) sotto il principio "l'umano conferma", con journey E2E. Verificabile **ora** con connettori **stub** al confine (come l'LLM in Fase 1) — niente sistemi esterni reali.*
+
+- [x] **Slice 1 — Gate di approvazione (human-in-the-loop)**: UI `/studio` "Distribuzione" → repurpose articolo → **approva/rifiuta** i post per canale prima che escano (transizione `draft→approved/rejected` idempotente; endpoint + gate UI). **Accettazione:** **E2E** *articolo pubblicato → repurpose → approva* verde in CI (connector stub al confine). ✓
+- [ ] **Slice 2 — UI newsletter**: gestione iscritti/segmenti + trigger dell'invio segmentato. **Accettazione:** E2E che invia a un segmento (Mailhog) e ne mostra l'esito.
+
+> **Fuori da questo task** (resta su **DEBT-008**, trigger *primo canale reale*): il consent-flow **OAuth per collegare un canale reale**. Qui i connettori sono stub al confine.
+
 ## Fase 3 — Monetizzazione & servizi
 - [ ] **Hub affiliazioni** + **redirector `/go/`** + tracking click. **Accettazione:** un click passa dal redirector e viene contato per link/articolo/canale.
 - [ ] **Commerce: `Trip` + `Departure` + booking a posti** (waitlist) + Stripe (test mode). **Accettazione:** journey *lancio partenza → prenoto posto → acconto → conferma* verde.
