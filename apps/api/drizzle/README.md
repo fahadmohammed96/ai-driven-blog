@@ -20,3 +20,8 @@ Colonne `content_items` (`type`/`status`/`blocks` jsonb/`updated_at`) + nuova ta
 `itinerary_stops`. Generato da drizzle-kit; **RLS + policy `tenant_isolation` su
 `itinerary_stops` aggiunte a mano** in coda (come da nota sopra). `content_items` eredita
 la policy già esistente (la policy vale per tutte le colonne, incl. le nuove).
+
+## `0002_*.sql` — Media-DAM (Fase 1)
+Tabelle `media_assets` (asset + varianti jsonb + `taken_on`/`lat`/`lng` da EXIF) e
+`itinerary_stop_photos` (link tappa↔foto, dominio travel). Generato da drizzle-kit;
+**RLS + policy `tenant_isolation` su entrambe aggiunte a mano** in coda.

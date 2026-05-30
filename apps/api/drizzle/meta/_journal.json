@@ -15,6 +15,13 @@
       "when": 1780102496792,
       "tag": "0001_flaky_viper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780103763416,
+      "tag": "0002_naive_bloodstrike",
+      "breakpoints": true
     }
   ]
 }

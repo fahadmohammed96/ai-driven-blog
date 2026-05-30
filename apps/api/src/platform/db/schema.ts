@@ -55,6 +55,43 @@ export const itineraryStops = pgTable("itinerary_stops", {
   notes: text("notes"),
 });
 
+/** Media-DAM: an uploaded asset (original + derived variants), tenant-scoped. */
+export const mediaAssets = pgTable("media_assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  contentItemId: uuid("content_item_id")
+    .notNull()
+    .references(() => contentItems.id),
+  storageKey: text("storage_key").notNull(),
+  variants: jsonb("variants").$type<{ thumb: string; web: string }>().notNull(),
+  takenOn: date("taken_on", { mode: "string" }),
+  lat: doublePrecision("lat"),
+  lng: doublePrecision("lng"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * Travel link: which itinerary stop a media asset was auto-organized into.
+ * Lives in the travel domain (a foundation has no FK into a vertical's table).
+ */
+export const itineraryStopPhotos = pgTable("itinerary_stop_photos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  stopId: uuid("stop_id")
+    .notNull()
+    .references(() => itineraryStops.id),
+  assetId: uuid("asset_id")
+    .notNull()
+    .references(() => mediaAssets.id)
+    .unique(),
+});
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")
