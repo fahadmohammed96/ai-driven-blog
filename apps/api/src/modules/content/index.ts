@@ -8,6 +8,7 @@ export {
   transitionContentItem,
   applyTransition,
   publishContentItem,
+  publishThroughReview,
   ContentNotFoundError,
   type ContentType,
   type ContentItemRow,

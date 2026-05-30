@@ -3,7 +3,7 @@ import type { Block, PublicationStatus } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
 import { contentItems } from "../../platform/db/schema";
-import { nextStatus, type PublicationEvent } from "./state-machine";
+import { nextStatus, InvalidTransitionError, type PublicationEvent } from "./state-machine";
 
 export class ContentNotFoundError extends Error {
   constructor(public readonly id: string) {
@@ -98,4 +98,34 @@ export function applyTransition(
 /** Publish a content item (idempotent): convenience for the 'publish' event. */
 export function publishContentItem(db: Db, tenantId: string, id: string): Promise<ContentItemRow> {
   return applyTransition(db, tenantId, id, "publish");
+}
+
+/** Event that advances each non-terminal status toward 'published'. */
+const ADVANCE: Partial<Record<PublicationStatus, PublicationEvent>> = {
+  draft: "propose",
+  proposed: "startReview",
+  review: "approve",
+  approved: "publish",
+};
+
+/**
+ * Walk a content item all the way to 'published' through the legal chain, in a
+ * single transaction (the founder's "confirm" = approve + publish; a granular
+ * review UI can later drive states one at a time). Idempotent once published.
+ */
+export async function publishThroughReview(
+  db: Db,
+  tenantId: string,
+  id: string,
+): Promise<ContentItemRow> {
+  return withTenant(db, tenantId, async (tx) => {
+    let item = await getContentItem(tx, id);
+    if (!item) throw new ContentNotFoundError(id);
+    while (item.status !== "published") {
+      const event = ADVANCE[item.status as PublicationStatus];
+      if (!event) throw new InvalidTransitionError(item.status as PublicationStatus, "publish");
+      item = await transitionContentItem(tx, id, event);
+    }
+    return item;
+  });
 }

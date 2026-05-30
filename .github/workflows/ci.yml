@@ -48,5 +48,19 @@ jobs:
       - name: Install Playwright browser
         run: pnpm --filter @blogs/web exec playwright install --with-deps chromium
 
-      - name: E2E smoke
+      # The journey drives web -> API -> Postgres + MinIO; bring the stack up.
+      # (Playwright boots API+web itself; the API self-migrates/seeds on start.)
+      - name: Start dev stack (Postgres + MinIO)
+        run: pnpm stack:up
+
+      - name: Wait for Postgres & MinIO
+        run: |
+          for i in $(seq 1 30); do docker compose -f docker/compose.yaml exec -T postgres pg_isready -U blogs && break; sleep 2; done
+          for i in $(seq 1 30); do curl -sf http://localhost:9000/minio/health/ready && break; sleep 2; done
+
+      - name: E2E (full-stack journey)
         run: pnpm --filter @blogs/web e2e
+
+      - name: Stop dev stack
+        if: always()
+        run: pnpm stack:down

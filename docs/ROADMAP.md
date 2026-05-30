@@ -25,7 +25,7 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 - [x] **Media/DAM**: upload diretto a storage, varianti (sharp), EXIF/geo (exifr), aggancio foto→tappe. **Accettazione:** una foto caricata si auto-organizza per luogo/data.
 - [x] **Generazione articolo** da itinerario + note + foto, nella voce dell'utente. **Accettazione:** dato un itinerario reale, produce una bozza con le foto incastrate; **misuratore di autenticità** segnala dove aggiungere esperienza.
 - [x] **Macchina a stati di pubblicazione** (bozza→proposta→revisione→approvato→pubblicato). **Accettazione:** un articolo percorre gli stati; la pubblicazione è idempotente.
-- [ ] **E2E**: *itinerario + foto → articolo pubblicato*. **Accettazione:** journey verde in CI.
+- [x] **E2E**: *itinerario + foto → articolo pubblicato*. **Accettazione:** journey verde in CI.
 
 ## Fase 2 — Distribuzione
 - [ ] **Repurposing** articolo → post social / **pin Pinterest**. **Accettazione:** da un articolo genera N output adattati per canale.
