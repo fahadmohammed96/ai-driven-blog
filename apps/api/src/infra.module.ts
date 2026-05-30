@@ -5,7 +5,9 @@ import { createLlmFromEnv } from "./platform/ai/llm";
 import { S3Storage } from "./modules/media";
 
 function databaseUrl(): string {
-  return process.env.DATABASE_URL ?? "postgresql://blogs:blogs@localhost:5432/blogs";
+  // Runtime connects as the least-privilege app role so RLS is enforced (DEBT-005).
+  // Migrations/seed/role-provisioning use DATABASE_ADMIN_URL (see main.ts bootstrap).
+  return process.env.DATABASE_URL ?? "postgresql://app_rw:app_rw@localhost:5432/blogs";
 }
 
 function storageConfig() {

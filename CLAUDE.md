@@ -8,11 +8,11 @@
 - **Fase 0 — Fondamenta: COMPLETA.** Monorepo pnpm+Turborepo: `apps/api` (NestJS, `platform/modules/verticals` con confini da arch-test), `apps/web` (Next.js), `packages/{contracts,config}`. Inclusi: Postgres+Drizzle con **RLS** su `tenant_id`; pipeline **AI** (brand voice + RAG su pgvector); **auth** minimale (login fondatore, [ADR-0010](docs/adr/0010-auth.md)). Lint/typecheck/unit/integration(Docker)/E2E(Playwright) verdi; **CI** GitHub Actions su ogni PR.
 - **Fase 1 — Il cuneo (dall'itinerario all'articolo): COMPLETA.** Vertical **travel**: tipo `Itinerary` → blocchi canonici; **Media-DAM** (upload S3/MinIO, varianti sharp, EXIF/geo via exifr, auto-organizzazione foto→tappa per data/luogo); **generazione articolo** nella brand voice con foto incastrate + **misuratore di autenticità**; **macchina a stati** di pubblicazione (bozza→…→pubblicato, publish idempotente); endpoint Nest + UI `/studio`; **E2E** *itinerario+foto→articolo pubblicato* verde in CI.
 - **Prossimo**: **Fase 2 — Distribuzione** (repurposing → social/Pinterest, newsletter, connettori) (vedi ROADMAP).
-- **Ambiente dev**: target **WSL2/Linux** ([ADR-0012](docs/adr/0012-dev-env-wsl2.md)) — esegui `scripts/setup-wsl.sh` dentro Ubuntu (clone nel FS WSL). Il checkout Windows `C:\` è legacy finché non migrato.
+- **Ambiente dev**: **WSL2/Linux** ([ADR-0012](docs/adr/0012-dev-env-wsl2.md)) — **migrazione fatta**: si lavora nel clone dentro il filesystem WSL (non in `/mnt/c`), Node via fnm + Docker Desktop (WSL integration). Il vecchio checkout Windows `C:\` resta solo come legacy.
 - **Dev stack**: `docker/compose.yaml` (Postgres + MinIO + Mailhog) → `pnpm stack:up` · `stack:check` · `stack:down`.
 - **Stack deciso**: TypeScript full-stack — NestJS · Next.js · Postgres + Drizzle · pg-boss.
 - **Aperti**: hosting (al deploy).
-- **Debito noto**: **DEBT-005 `OPEN`** — a runtime l'app si connette come superuser → **RLS bypassata a runtime** (enforce nei test); trigger di rientro: **tenant #2**. DEBT-001/002/003/004 **PAID** (vedi [TECH_DEBT](docs/TECH_DEBT.md)).
+- **Debito noto**: **nessuno aperto** — DEBT-001…005 tutti **PAID**. DEBT-005 (RLS attiva a runtime via ruolo app `app_rw` `NOSUPERUSER`) pagato in anticipo. Vedi [TECH_DEBT](docs/TECH_DEBT.md).
 
 ## Fonti di verità — LEGGI PRIMA DI LAVORARE
 Questi documenti del repo sono **canonici** (versionati, condivisi). Non fidarti della chat.

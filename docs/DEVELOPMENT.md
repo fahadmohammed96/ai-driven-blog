@@ -70,6 +70,7 @@ Distinguiamo debito *spericolato* (sciatteria — bloccato dai gate sopra) da *p
 ## 8. Ambiente & CI
 - **Docker** per isolare dev + test. `docker-compose`: **Postgres + MinIO (S3) + Mailhog (email)** (Redis solo quando si passa a BullMQ). App su host per hot-reload veloce; in container per CI/prod. **Docker ≠ microservizi**: il monolite è un container.
 - **E2E full-stack**: Playwright avvia web→API; l'**API in dev/E2E** fa **auto-migrate + seed tenant + ensure-bucket** al boot con `DB_AUTO_MIGRATE=1` (vedi `apps/api/src/main.ts`). L'**LLM è fittizio al confine** nei test (e `StubLlmClient` se manca `ANTHROPIC_API_KEY`) → niente chiamate reali/pagate in CI.
+- **Ruolo DB a runtime (DEBT-005)**: il bootstrap usa una connessione **admin** (`DATABASE_ADMIN_URL`, superuser) per migrate/seed/provisioning; l'app gira come ruolo **`app_rw` `NOSUPERUSER`** (`DATABASE_URL`) così la **RLS è enforce a runtime**, non solo nei test. `ensureAppRole` (in `platform/db/bootstrap.ts`) crea ruolo + `GRANT` mirati (idempotente).
 - **CI = punto di imposizione**: merge bloccato se rosso. Per PR: lint + typecheck + build + unit + **HTTP (swc+Testcontainers)** + integration (Testcontainers) + **E2E full-stack** (porta su lo stack). Di notte: E2E completi + mutation.
 
 ## 9. Tooling futuro

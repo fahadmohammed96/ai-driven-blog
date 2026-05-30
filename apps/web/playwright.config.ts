@@ -6,7 +6,11 @@ import { defineConfig } from "@playwright/test";
 const apiEnv: Record<string, string> = {
   PORT: "3000",
   DB_AUTO_MIGRATE: "1",
-  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://blogs:blogs@localhost:5432/blogs",
+  // Admin connection bootstraps (migrate/seed/provision app role); the app runs
+  // as the NOSUPERUSER app role so RLS is enforced at runtime (DEBT-005).
+  DATABASE_ADMIN_URL: process.env.DATABASE_ADMIN_URL ?? "postgresql://blogs:blogs@localhost:5432/blogs",
+  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://app_rw:app_rw@localhost:5432/blogs",
+  APP_DB_PASSWORD: process.env.APP_DB_PASSWORD ?? "app_rw",
   S3_ENDPOINT: process.env.S3_ENDPOINT ?? "http://localhost:9000",
   S3_REGION: process.env.S3_REGION ?? "us-east-1",
   S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? "minio",
