@@ -69,7 +69,8 @@ Distinguiamo debito *spericolato* (sciatteria — bloccato dai gate sopra) da *p
 
 ## 8. Ambiente & CI
 - **Docker** per isolare dev + test. `docker-compose`: **Postgres + MinIO (S3) + Mailhog (email)** (Redis solo quando si passa a BullMQ). App su host per hot-reload veloce; in container per CI/prod. **Docker ≠ microservizi**: il monolite è un container.
-- **CI = punto di imposizione**: merge bloccato se rosso. Per PR: lint + typecheck + unit + integration (Testcontainers) + E2E smoke. Di notte: E2E completi + mutation.
+- **E2E full-stack**: Playwright avvia web→API; l'**API in dev/E2E** fa **auto-migrate + seed tenant + ensure-bucket** al boot con `DB_AUTO_MIGRATE=1` (vedi `apps/api/src/main.ts`). L'**LLM è fittizio al confine** nei test (e `StubLlmClient` se manca `ANTHROPIC_API_KEY`) → niente chiamate reali/pagate in CI.
+- **CI = punto di imposizione**: merge bloccato se rosso. Per PR: lint + typecheck + build + unit + **HTTP (swc+Testcontainers)** + integration (Testcontainers) + **E2E full-stack** (porta su lo stack). Di notte: E2E completi + mutation.
 
 ## 9. Tooling futuro
 - **Graphify** (`safishamsi/graphify`): knowledge graph del codebase contro il context rot. **Non ora** (greenfield) → adottare in fase 1/2 quando il codice cresce. Complemento, non sostituto, di ADR/CLAUDE.md.

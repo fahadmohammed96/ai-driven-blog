@@ -27,6 +27,8 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 - [x] **Macchina a stati di pubblicazione** (bozza→proposta→revisione→approvato→pubblicato). **Accettazione:** un articolo percorre gli stati; la pubblicazione è idempotente.
 - [x] **E2E**: *itinerario + foto → articolo pubblicato*. **Accettazione:** journey verde in CI.
 
+> **Fase 1 COMPLETA.** Debt-gate: nessun debito *scaduto* — l'unico aperto (**DEBT-005**, RLS a runtime) ha trigger *tenant #2*, non ancora dovuto. Si può aprire la Fase 2.
+
 ## Fase 2 — Distribuzione
 - [ ] **Repurposing** articolo → post social / **pin Pinterest**. **Accettazione:** da un articolo genera N output adattati per canale.
 - [ ] **Newsletter** + liste/segmenti per **tema** + double opt-in (GDPR). **Accettazione:** invio segmentato verso Mailhog in test; double opt-in tracciato.
