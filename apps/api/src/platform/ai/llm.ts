@@ -39,3 +39,19 @@ export class AnthropicLlmClient implements LlmClient {
       .join("");
   }
 }
+
+/**
+ * Deterministic offline LLM for environments without an API key (E2E/CI):
+ * returns a plausible first-person paragraph so the pipeline runs end-to-end
+ * without calling — or paying for — the real model.
+ */
+export class StubLlmClient implements LlmClient {
+  async complete(): Promise<string> {
+    return "Ho vissuto questa tappa con calma, lasciandomi sorprendere da ogni dettaglio e da ogni incontro.";
+  }
+}
+
+/** Use the real Anthropic client when an API key is present, else the stub. */
+export function createLlmFromEnv(): LlmClient {
+  return process.env.ANTHROPIC_API_KEY ? new AnthropicLlmClient() : new StubLlmClient();
+}

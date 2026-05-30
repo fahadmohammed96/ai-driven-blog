@@ -56,12 +56,12 @@ beforeAll(async () => {
   // Insert tenant-scoped rows as the restricted role, each under its tenant context.
   await db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.current_tenant', ${TENANT_A}, true)`);
-    await tx.execute(sql`insert into content_items (tenant_id, title) values (${TENANT_A}::uuid, 'A-1')`);
-    await tx.execute(sql`insert into content_items (tenant_id, title) values (${TENANT_A}::uuid, 'A-2')`);
+    await tx.execute(sql`insert into content_items (tenant_id, type, title) values (${TENANT_A}::uuid, 'article', 'A-1')`);
+    await tx.execute(sql`insert into content_items (tenant_id, type, title) values (${TENANT_A}::uuid, 'article', 'A-2')`);
   });
   await db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.current_tenant', ${TENANT_B}, true)`);
-    await tx.execute(sql`insert into content_items (tenant_id, title) values (${TENANT_B}::uuid, 'B-1')`);
+    await tx.execute(sql`insert into content_items (tenant_id, type, title) values (${TENANT_B}::uuid, 'article', 'B-1')`);
   });
 }, 180_000);
 

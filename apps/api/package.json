@@ -16,14 +16,19 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",
+    "@aws-sdk/client-s3": "^3.1056.0",
+    "@aws-sdk/s3-request-presigner": "^3.1056.0",
+    "@blogs/contracts": "workspace:*",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "drizzle-orm": "^0.38.0",
+    "exifr": "^7.1.3",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.0.0",

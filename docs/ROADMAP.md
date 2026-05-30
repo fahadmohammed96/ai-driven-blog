@@ -21,11 +21,13 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 ## Fase 1 — Il cuneo: dall'itinerario all'articolo
 *Obiettivo: il valore #1 per il fondatore.*
 
-- [ ] **Vertical travel: tipo `Itinerary`** (tappe, luoghi, date, geo) sul modello canonico. **Accettazione:** si crea/edita un itinerario e si serializza in blocchi.
-- [ ] **Media/DAM**: upload diretto a storage, varianti (sharp), EXIF/geo (exifr), aggancio foto→tappe. **Accettazione:** una foto caricata si auto-organizza per luogo/data.
-- [ ] **Generazione articolo** da itinerario + note + foto, nella voce dell'utente. **Accettazione:** dato un itinerario reale, produce una bozza con le foto incastrate; **misuratore di autenticità** segnala dove aggiungere esperienza.
-- [ ] **Macchina a stati di pubblicazione** (bozza→proposta→revisione→approvato→pubblicato). **Accettazione:** un articolo percorre gli stati; la pubblicazione è idempotente.
-- [ ] **E2E**: *itinerario + foto → articolo pubblicato*. **Accettazione:** journey verde in CI.
+- [x] **Vertical travel: tipo `Itinerary`** (tappe, luoghi, date, geo) sul modello canonico. **Accettazione:** si crea/edita un itinerario e si serializza in blocchi.
+- [x] **Media/DAM**: upload diretto a storage, varianti (sharp), EXIF/geo (exifr), aggancio foto→tappe. **Accettazione:** una foto caricata si auto-organizza per luogo/data.
+- [x] **Generazione articolo** da itinerario + note + foto, nella voce dell'utente. **Accettazione:** dato un itinerario reale, produce una bozza con le foto incastrate; **misuratore di autenticità** segnala dove aggiungere esperienza.
+- [x] **Macchina a stati di pubblicazione** (bozza→proposta→revisione→approvato→pubblicato). **Accettazione:** un articolo percorre gli stati; la pubblicazione è idempotente.
+- [x] **E2E**: *itinerario + foto → articolo pubblicato*. **Accettazione:** journey verde in CI.
+
+> **Fase 1 COMPLETA.** Debt-gate: nessun debito *scaduto* — l'unico aperto (**DEBT-005**, RLS a runtime) ha trigger *tenant #2*, non ancora dovuto. Si può aprire la Fase 2.
 
 ## Fase 2 — Distribuzione
 - [ ] **Repurposing** articolo → post social / **pin Pinterest**. **Accettazione:** da un articolo genera N output adattati per canale.

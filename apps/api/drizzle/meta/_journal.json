@@ -8,6 +8,27 @@
       "when": 1780076357323,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1780102496792,
+      "tag": "0001_flaky_viper",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780103763416,
+      "tag": "0002_naive_bloodstrike",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780126753688,
+      "tag": "0003_organic_abomination",
+      "breakpoints": true
     }
   ]
 }

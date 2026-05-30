@@ -14,3 +14,19 @@ drizzle-kit non emette dal solo schema:
 
 Lo snapshot drizzle-kit (`meta/`) traccia **solo le tabelle**: quando aggiungi una nuova
 tabella tenant-scoped, ricòrdati di aggiungere RLS + policy nella migrazione generata.
+
+## `0001_*.sql` — content blocks + itinerary (Fase 1)
+Colonne `content_items` (`type`/`status`/`blocks` jsonb/`updated_at`) + nuova tabella
+`itinerary_stops`. Generato da drizzle-kit; **RLS + policy `tenant_isolation` su
+`itinerary_stops` aggiunte a mano** in coda (come da nota sopra). `content_items` eredita
+la policy già esistente (la policy vale per tutte le colonne, incl. le nuove).
+
+## `0002_*.sql` — Media-DAM (Fase 1)
+Tabelle `media_assets` (asset + varianti jsonb + `taken_on`/`lat`/`lng` da EXIF) e
+`itinerary_stop_photos` (link tappa↔foto, dominio travel). Generato da drizzle-kit;
+**RLS + policy `tenant_isolation` su entrambe aggiunte a mano** in coda.
+
+## `0003_*.sql` — published_at (Fase 1)
+Colonna `content_items.published_at` (nullable) per la macchina a stati di pubblicazione
+(impostata **una sola volta** al primo `published` → publish idempotente). Nessuna RLS
+aggiuntiva: la policy di `content_items` copre anche la nuova colonna.
