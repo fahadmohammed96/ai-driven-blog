@@ -1,8 +1,10 @@
 import { asc, eq } from "drizzle-orm";
+import type { Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
 import { itineraryStops, itineraryStopPhotos } from "../../platform/db/schema";
 // Compose the Media-DAM via its public barrel.
 import { ingestPhoto, matchPhotoToSegment, type MediaDeps, type DatedPlace } from "../../modules/media";
+import type { ArticlePhoto } from "./article";
 
 export interface AttachPhotoInput {
   tenantId: string;
@@ -52,5 +54,35 @@ export async function attachPhotoToItinerary(
       .insert(itineraryStopPhotos)
       .values({ tenantId: input.tenantId, stopId, assetId: ingest.id });
     return { assetId: ingest.id, stopId };
+  });
+}
+
+/**
+ * Load an itinerary's organized photos as article inputs: each linked asset
+ * paired with the index of the stop it belongs to (the order articles render in).
+ */
+export async function loadItineraryPhotos(
+  db: Db,
+  tenantId: string,
+  itineraryId: string,
+): Promise<ArticlePhoto[]> {
+  return withTenant(db, tenantId, async (tx) => {
+    const stops = await tx
+      .select({ id: itineraryStops.id })
+      .from(itineraryStops)
+      .where(eq(itineraryStops.contentItemId, itineraryId))
+      .orderBy(asc(itineraryStops.position));
+    const indexByStop = new Map(stops.map((s, i) => [s.id, i]));
+
+    const links = await tx
+      .select({ assetId: itineraryStopPhotos.assetId, stopId: itineraryStopPhotos.stopId })
+      .from(itineraryStopPhotos)
+      .innerJoin(itineraryStops, eq(itineraryStopPhotos.stopId, itineraryStops.id))
+      .where(eq(itineraryStops.contentItemId, itineraryId));
+
+    return links.flatMap((l) => {
+      const stopIndex = indexByStop.get(l.stopId);
+      return stopIndex === undefined ? [] : [{ assetId: l.assetId, stopIndex }];
+    });
   });
 }
