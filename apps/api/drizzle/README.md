@@ -30,3 +30,19 @@ Tabelle `media_assets` (asset + varianti jsonb + `taken_on`/`lat`/`lng` da EXIF)
 Colonna `content_items.published_at` (nullable) per la macchina a stati di pubblicazione
 (impostata **una sola volta** al primo `published` → publish idempotente). Nessuna RLS
 aggiuntiva: la policy di `content_items` copre anche la nuova colonna.
+
+## `0004_*.sql` — channel_posts (Fase 2 · repurposing)
+Tabella `channel_posts` (proiezione adattata per canale di un articolo: `channel`,
+`status`, `payload` jsonb). Generato da drizzle-kit; **RLS + policy `tenant_isolation`
+aggiunte a mano** in coda.
+
+## `0005_*.sql` — subscribers + subscriptions (Fase 2 · newsletter)
+Tabelle `subscribers` (double opt-in: `status`, `confirm_token`, `requested_at`/
+`confirmed_at`/`unsubscribed_at`; unique `(tenant_id,email)`) e `subscriptions`
+(opt-in per tema; unique `(subscriber_id,theme)`). Generato da drizzle-kit; **RLS +
+policy `tenant_isolation` su entrambe aggiunte a mano** in coda.
+
+## `0006_*.sql` — connector_credentials (Fase 2 · Integration Gateway)
+Tabella `connector_credentials` (token OAuth **cifrati** a riposo: `access_token`/
+`refresh_token` sealed, `expires_at`; unique `(tenant_id,connector)`). Generato da
+drizzle-kit; **RLS + policy `tenant_isolation` aggiunta a mano** in coda.

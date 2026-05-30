@@ -30,9 +30,11 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 > **Fase 1 COMPLETA.** Debt-gate: nessun debito *scaduto* — l'unico aperto (**DEBT-005**, RLS a runtime) ha trigger *tenant #2*, non ancora dovuto. Si può aprire la Fase 2.
 
 ## Fase 2 — Distribuzione
-- [ ] **Repurposing** articolo → post social / **pin Pinterest**. **Accettazione:** da un articolo genera N output adattati per canale.
-- [ ] **Newsletter** + liste/segmenti per **tema** + double opt-in (GDPR). **Accettazione:** invio segmentato verso Mailhog in test; double opt-in tracciato.
-- [ ] **Connettori canali** (Integration Gateway) con OAuth/refresh + rate-limit. **Accettazione:** contract test verde verso il/i canale/i.
+- [x] **Repurposing** articolo → post social / **pin Pinterest**. **Accettazione:** da un articolo genera N output adattati per canale. *(Proiettori deterministici sul modello canonico a blocchi — ADR-0017; tabella `channel_posts` con RLS; unit + integration RLS + HTTP swc verdi.)*
+- [x] **Newsletter** + liste/segmenti per **tema** + double opt-in (GDPR). **Accettazione:** invio segmentato verso Mailhog in test; double opt-in tracciato. *(Macchina a stati double opt-in + `EmailPort`/SMTP — ADR-0018; tabelle `subscribers`/`subscriptions` con RLS; integration con **Mailhog reale** via Testcontainers verde.)*
+- [x] **Connettori canali** (Integration Gateway) con OAuth/refresh + rate-limit. **Accettazione:** contract test verde verso il/i canale/i. *(Connector Pinterest: OAuth2 refresh su scadenza/401 + rate-limit token-bucket + segreti per-tenant cifrati AES-256-GCM con RLS — ADR-0019; contract test guidato da OpenAPI verde.)*
+
+> **Fase 2 COMPLETA.** Debt-gate: nessun debito *scaduto*. Nuove voci registrate (DEBT-006…008) hanno trigger *al secondo connettore / prima del primo invio o canale reale*, non ancora dovuti. Si può aprire la Fase 3.
 
 ## Fase 3 — Monetizzazione & servizi
 - [ ] **Hub affiliazioni** + **redirector `/go/`** + tracking click. **Accettazione:** un click passa dal redirector e viene contato per link/articolo/canale.
