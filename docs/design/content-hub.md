@@ -43,16 +43,22 @@ outside the group and are unaffected.
 
 ## 3. The 4 surfaces
 
-### Surface 1 — Library (slice 1)
+### Surface 1 — Library (slice 1) — BUILT
 The home base for content. Lists every **ContentItem** (article, page, gallery,
 itinerary…) with a **state badge** from the publish state machine
 (`draft → proposed → review → approved → published`), filterable by type/state.
 Each row links into the Block Editor.
 
-- Reuses: `PublicationStatus` + `StateBadge`, the article read endpoint shape.
-- **Gap (handoff):** there is no list/collection endpoint yet — `GET /articles`
-  returns one item by id only. Slice 1 needs a list endpoint (or a thin
-  read-model) in `modules/content`. Tracked as **DEBT-009**.
+- Reuses: `PublicationStatus` + `StateBadge`, the `fetch`/`NEXT_PUBLIC_API_URL`
+  client pattern, `PageHeader` + `Card`.
+- **Data source (DEBT-009 PAID):** `GET /articles` is now a **list read-model**
+  in `modules/content` — `{ items: [{ id, type, status, title, publishedAt,
+  updatedAt }] }`, optional `?type=` / `?status=` filters, behind the tenant
+  guard + RLS. The filter selects re-fetch with those query params.
+- **Editor URL contract (for slice 2):** each row links to **`/editor?id=<id>`**
+  (the ContentItem id). Slice 2's Block Editor reads `id` from the query string
+  and loads that item via `GET /articles/:id`. This is the stable navigation
+  contract between Library and Editor.
 
 ### Surface 2 — Block Editor (slice 2)
 Edits a ContentItem on the **canonical block model** — an ordered list of
@@ -146,7 +152,7 @@ Brand voice, **per-specialist autonomy knob** and channels.
 | Hub home | `app/(hub)/hub/page.tsx` | launcher tiles |
 
 ### To build in later slices
-- Library list + filters (needs the list endpoint — DEBT-009).
+- ~~Library list + filters (needs the list endpoint — DEBT-009).~~ **Done (slice 1).**
 - Block-editor canvas + authenticity-meter panel.
 - Proposal cards + approve/edit/reject actions over the state machine.
 - Settings forms: brand voice, autonomy stub, channels.

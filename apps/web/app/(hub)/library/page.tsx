@@ -1,16 +1,150 @@
-import { PageHeader, SurfacePlaceholder } from "../../../src/ui/components";
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { PageHeader, Card, StateBadge, type PublicationStatus } from "../../../src/ui/components";
+import { color, font, radius, space } from "../../../src/ui/tokens";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+
+// The canonical content types today (see modules/content ContentType). Kept in
+// one place so the filter and any later surface read the same vocabulary.
+const TYPES = ["article", "itinerary"] as const;
+const STATUSES: PublicationStatus[] = ["draft", "proposed", "review", "approved", "published"];
+
+interface ContentListItem {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
+/**
+ * Stable URL contract toward the (slice-2) Block Editor: a content item is
+ * edited at `/editor?id=<id>`. Slice 2 reads `id` from the query string.
+ */
+function editorHref(id: string): string {
+  return `/editor?id=${id}`;
+}
 
 export default function LibrarySurface() {
+  const [items, setItems] = useState<ContentListItem[]>([]);
+  const [type, setType] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  const load = useCallback(async () => {
+    setError(null);
+    const qs = new URLSearchParams();
+    if (type) qs.set("type", type);
+    if (status) qs.set("status", status);
+    const suffix = qs.toString() ? `?${qs}` : "";
+    try {
+      const res = await fetch(`${API}/articles${suffix}`);
+      if (!res.ok) {
+        setError("Caricamento contenuti fallito");
+        return;
+      }
+      setItems((await res.json()).items as ContentListItem[]);
+    } catch {
+      setError("Caricamento contenuti fallito");
+    } finally {
+      setLoaded(true);
+    }
+  }, [type, status]);
+
+  // Re-fetch with the active filters whenever they change (the list endpoint
+  // applies `type`/`status` server-side under the tenant guard + RLS).
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   return (
     <div data-testid="surface-library">
       <PageHeader
         title="Library"
-        subtitle="Tutti i contenuti (article, page, gallery, itinerary…), filtrabili, con il badge di stato."
+        subtitle="Tutti i contenuti, filtrabili, con il badge di stato dalla macchina a stati di pubblicazione."
       />
-      <SurfacePlaceholder slice={1}>
-        Qui vivranno tutti i ContentItem con filtri e badge di stato dalla macchina a stati di
-        pubblicazione.
-      </SurfacePlaceholder>
+
+      <div style={{ display: "flex", gap: space.md, marginBottom: space.lg }}>
+        <label style={{ fontSize: font.size.sm, color: color.textMuted }}>
+          Tipo{" "}
+          <select
+            data-testid="filter-type"
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">Tutti</option>
+            {TYPES.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={{ fontSize: font.size.sm, color: color.textMuted }}>
+          Stato{" "}
+          <select
+            data-testid="filter-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            style={selectStyle}
+          >
+            <option value="">Tutti</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {error && (
+        <p data-testid="library-error" style={{ color: color.danger }}>
+          {error}
+        </p>
+      )}
+
+      {loaded && items.length === 0 && !error && (
+        <Card testId="library-empty">
+          <p style={{ margin: 0, color: color.textMuted }}>Nessun contenuto per questi filtri.</p>
+        </Card>
+      )}
+
+      <ul
+        data-testid="library-list"
+        style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: space.md }}
+      >
+        {items.map((item) => (
+          <li key={item.id} data-testid="library-item" data-type={item.type} data-status={item.status}>
+            <Link href={editorHref(item.id)} style={{ textDecoration: "none", color: "inherit" }}>
+              <Card style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span>
+                  <span style={{ fontWeight: 600, color: color.text }}>{item.title}</span>
+                  <span style={{ marginLeft: space.sm, color: color.textMuted, fontSize: font.size.sm }}>
+                    {item.type}
+                  </span>
+                </span>
+                <StateBadge status={item.status as PublicationStatus} />
+              </Card>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
+
+const selectStyle = {
+  fontSize: font.size.sm,
+  padding: `2px ${space.sm}`,
+  borderRadius: radius.sm,
+  border: `1px solid ${color.border}`,
+  background: color.surface,
+  color: color.text,
+};

@@ -4,6 +4,8 @@ export { ContentService } from "./content.service";
 export {
   insertContentItem,
   getContentItem,
+  listContentItems,
+  type ContentListFilters,
   updateContentItem,
   transitionContentItem,
   applyTransition,

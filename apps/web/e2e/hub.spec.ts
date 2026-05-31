@@ -5,11 +5,12 @@ import { test, expect } from "@playwright/test";
 // wizard) — no required ordering between them. Real functionality lands in
 // later slices; here we only assert the shell + navigation + placeholders.
 
-// Each surface: nav link testid → expected URL → placeholder testid → the slice
-// where the real feature arrives (asserted to keep the "coming in slice N"
-// contract honest as later slices replace each placeholder).
+// Each surface: nav link testid → expected URL → surface root testid → the slice
+// where the real feature arrives. Surfaces still scaffolded show the "coming in
+// slice N" placeholder; ones already built (Library, slice 1) assert a real
+// landmark instead — keeping the contract honest as later slices land.
 const SURFACES = [
-  { nav: "nav-library", path: "/library", surface: "surface-library", slice: 1 },
+  { nav: "nav-library", path: "/library", surface: "surface-library", slice: 1, built: "library-list" },
   { nav: "nav-editor", path: "/editor", surface: "surface-editor", slice: 2 },
   { nav: "nav-proposals", path: "/proposals", surface: "surface-proposals", slice: 3 },
   { nav: "nav-settings", path: "/settings", surface: "surface-settings", slice: 4 },
@@ -34,9 +35,14 @@ test("each surface is reachable as an independent section via the toolbox", asyn
     await page.getByTestId("toolbox-nav").getByTestId(s.nav).click();
     await expect(page).toHaveURL(new RegExp(`${s.path}$`));
     await expect(page.getByTestId(s.surface)).toBeVisible();
-    await expect(page.getByTestId("surface-placeholder")).toContainText(
-      new RegExp(`slice ${s.slice}`, "i"),
-    );
+    if ("built" in s) {
+      // Real surface: assert its landmark, not the placeholder.
+      await expect(page.getByTestId(s.built)).toBeVisible();
+    } else {
+      await expect(page.getByTestId("surface-placeholder")).toContainText(
+        new RegExp(`slice ${s.slice}`, "i"),
+      );
+    }
     // The toolbox nav persists on every surface (app-shell, not per-page chrome).
     await expect(page.getByTestId("toolbox-nav")).toBeVisible();
   }

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import type { Block, PublicationStatus } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
@@ -39,6 +39,32 @@ export async function insertContentItem(tx: Tx, input: NewContentItem): Promise<
     .returning();
   // INSERT ... RETURNING always yields exactly the inserted row.
   return row as ContentItemRow;
+}
+
+/** Optional filters for the content-item list read-model. */
+export interface ContentListFilters {
+  type?: ContentType;
+  status?: PublicationStatus;
+}
+
+/**
+ * List the current tenant's content items (RLS scopes to the tenant context),
+ * newest-touched first. `type` / `status` narrow the result when provided.
+ * Read-model behind the Library surface (slice 1).
+ */
+export async function listContentItems(
+  tx: Tx,
+  filters: ContentListFilters = {},
+): Promise<ContentItemRow[]> {
+  const conds: SQL[] = [];
+  if (filters.type) conds.push(eq(contentItems.type, filters.type));
+  if (filters.status) conds.push(eq(contentItems.status, filters.status));
+  const where = conds.length ? and(...conds) : undefined;
+  return tx
+    .select()
+    .from(contentItems)
+    .where(where)
+    .orderBy(desc(contentItems.updatedAt));
 }
 
 /** Fetch a content item by id (RLS returns null for other tenants). */

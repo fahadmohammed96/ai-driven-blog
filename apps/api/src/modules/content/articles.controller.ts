@@ -7,13 +7,21 @@ import {
   NotFoundException,
   Param,
   Post,
+  Query,
 } from "@nestjs/common";
-import type { Block } from "@blogs/contracts";
+import type { Block, PublicationStatus } from "@blogs/contracts";
 import { DB } from "../../platform/tokens";
 import type { Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
 import { TenancyService } from "../tenancy";
-import { getContentItem, publishThroughReview, ContentNotFoundError } from "./content.repo";
+import {
+  getContentItem,
+  listContentItems,
+  publishThroughReview,
+  ContentNotFoundError,
+  type ContentListFilters,
+  type ContentType,
+} from "./content.repo";
 import { InvalidTransitionError } from "./state-machine";
 
 interface ArticleView {
@@ -25,6 +33,16 @@ interface ArticleView {
   publishedAt: Date | null;
 }
 
+/** Lightweight list row for the Library surface (no blocks payload). */
+interface ContentListItemView {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
+  publishedAt: Date | null;
+  updatedAt: Date;
+}
+
 @Controller("articles")
 export class ArticlesController {
   constructor(
@@ -34,6 +52,27 @@ export class ArticlesController {
 
   private get tenantId(): string {
     return this.tenancy.current().tenantId;
+  }
+
+  @Get()
+  async list(
+    @Query("type") type?: string,
+    @Query("status") status?: string,
+  ): Promise<{ items: ContentListItemView[] }> {
+    const filters: ContentListFilters = {};
+    if (type) filters.type = type as ContentType;
+    if (status) filters.status = status as PublicationStatus;
+    const rows = await withTenant(this.db, this.tenantId, (tx) => listContentItems(tx, filters));
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        type: r.type,
+        status: r.status,
+        title: r.title,
+        publishedAt: r.publishedAt,
+        updatedAt: r.updatedAt,
+      })),
+    };
   }
 
   @Get(":id")
