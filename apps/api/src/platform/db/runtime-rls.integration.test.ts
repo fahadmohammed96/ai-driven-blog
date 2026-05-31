@@ -24,6 +24,7 @@ import {
   trips,
   departures,
   bookings,
+  leads,
 } from "./schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -183,5 +184,27 @@ describe("runtime RLS via the least-privilege app role (DEBT-005)", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]!.status).toBe("confirmed");
+  });
+
+  // Same grant guard for the Fase-3 CRM table: the custom-trip pipeline inserts a
+  // lead and updates it through the pipeline (proposal/deposit/deliver) as the app
+  // role. A missing grant = "permission denied for table leads" at runtime.
+  it("can write+read leads as the app role (grant present)", async () => {
+    const rows = await withTenant(appDb, TENANT_A, async (tx) => {
+      const [lead] = await tx
+        .insert(leads)
+        .values({
+          tenantId: TENANT_A,
+          customerEmail: "lead@a.com",
+          channel: "email",
+          request: "Custom trip to Patagonia",
+          portalToken: "grant-check-token",
+        })
+        .returning();
+      await tx.update(leads).set({ status: "ai_drafted", proposal: "Bozza" }).where(eq(leads.id, lead!.id));
+      return tx.select().from(leads).where(eq(leads.id, lead!.id));
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("ai_drafted");
   });
 });

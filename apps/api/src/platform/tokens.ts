@@ -4,3 +4,4 @@ export const STORAGE = Symbol("STORAGE");
 export const LLM = Symbol("LLM");
 export const EMAIL = Symbol("EMAIL");
 export const PAYMENT = Symbol("PAYMENT");
+export const NOTIFICATION = Symbol("NOTIFICATION");

@@ -10,6 +10,7 @@ import { EmailModule } from "./modules/email";
 import { SettingsModule } from "./modules/settings";
 import { MonetizationModule } from "./modules/monetization";
 import { CommerceModule } from "./modules/commerce";
+import { CrmModule } from "./modules/crm";
 import { TravelModule } from "./verticals/travel/travel.module";
 
 @Module({
@@ -23,6 +24,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     SettingsModule,
     MonetizationModule,
     CommerceModule,
+    CrmModule,
     TravelModule,
   ],
   controllers: [AppController],

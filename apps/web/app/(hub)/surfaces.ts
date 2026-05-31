@@ -60,4 +60,10 @@ export const SURFACES: Surface[] = [
     navTestId: "nav-trips",
     hint: "Viaggi programmati: lancia partenze, prenota un posto, versa l'acconto (waitlist se pieno).",
   },
+  {
+    href: "/crm",
+    label: "CRM",
+    navTestId: "nav-crm",
+    hint: "Richieste su misura: l'AI propone, tu approvi prima dell'invio, acconto e consegna nel portale cliente.",
+  },
 ];

@@ -16,6 +16,7 @@ const SURFACES = [
   { nav: "nav-settings", path: "/settings", surface: "surface-settings", slice: 4, built: "settings-header" },
   { nav: "nav-affiliates", path: "/affiliates", surface: "surface-affiliates", slice: 1, built: "affiliates-header" },
   { nav: "nav-trips", path: "/trips", surface: "surface-trips", slice: 2, built: "trips-header" },
+  { nav: "nav-crm", path: "/crm", surface: "surface-crm", slice: 3, built: "crm-header" },
 ] as const;
 
 test("hub shell loads and the toolbox nav renders", async ({ page }) => {

@@ -300,6 +300,43 @@ export const bookings = pgTable("bookings", {
   confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
 });
 
+/**
+ * CRM custom-trip pipeline (Fase 3, motion "Su misura" — INBOUND/one-to-one). A
+ * **Lead** is an inbound custom-trip request driven by the lead state machine
+ * (`received → ai_drafted → human_approved → sent → deposit_pending → confirmed →
+ * delivered`). `proposal` is the AI-drafted offer (null until drafted, and never
+ * sent until a human approves — the inbound gate). `depositCents`/`currency` carry
+ * the offered deposit; `paymentRef` is the PaymentPort reference once the deposit
+ * is collected. `portalToken` is the unguessable token for the client-portal read
+ * view (`/portal/:token`). Tenant-scoped by RLS.
+ */
+export const leads = pgTable(
+  "leads",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    customerEmail: text("customer_email").notNull(),
+    customerName: text("customer_name"),
+    channel: text("channel").notNull().default("email"),
+    request: text("request").notNull(),
+    status: text("status").notNull().default("received"),
+    proposal: text("proposal"),
+    depositCents: integer("deposit_cents"),
+    currency: text("currency").notNull().default("eur"),
+    paymentRef: text("payment_ref"),
+    portalToken: text("portal_token").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+  },
+  (t) => [unique("leads_portal_token_unique").on(t.portalToken)],
+);
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")

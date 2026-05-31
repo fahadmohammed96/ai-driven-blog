@@ -19,3 +19,4 @@ export * from "./newsletter";
 export * from "./settings";
 export * from "./affiliate";
 export * from "./commerce";
+export * from "./crm";

@@ -71,6 +71,13 @@
       "when": 1780246131343,
       "tag": "0009_mean_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1780257199090,
+      "tag": "0010_cuddly_human_cannonball",
+      "breakpoints": true
     }
   ]
 }
