@@ -11,7 +11,7 @@ import { test, expect } from "@playwright/test";
 // landmark instead — keeping the contract honest as later slices land.
 const SURFACES = [
   { nav: "nav-library", path: "/library", surface: "surface-library", slice: 1, built: "library-list" },
-  { nav: "nav-editor", path: "/editor", surface: "surface-editor", slice: 2 },
+  { nav: "nav-editor", path: "/editor", surface: "surface-editor", slice: 2, built: "editor-header" },
   { nav: "nav-proposals", path: "/proposals", surface: "surface-proposals", slice: 3 },
   { nav: "nav-settings", path: "/settings", surface: "surface-settings", slice: 4 },
 ] as const;
