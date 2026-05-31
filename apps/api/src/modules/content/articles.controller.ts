@@ -24,7 +24,10 @@ import {
   listContentItems,
   updateContentItem,
   publishThroughReview,
+  applyTransition,
+  decideContentItem,
   ContentNotFoundError,
+  type ContentItemRow,
   type ContentListFilters,
   type ContentType,
 } from "./content.repo";
@@ -37,6 +40,14 @@ interface ArticleView {
   title: string;
   blocks: Block[];
   publishedAt: Date | null;
+}
+
+/** Result of a state-machine transition (propose/approve/reject). */
+interface TransitionView {
+  id: string;
+  type: string;
+  status: string;
+  title: string;
 }
 
 /** Lightweight list row for the Library surface (no blocks payload). */
@@ -154,6 +165,40 @@ export class ArticlesController {
     try {
       const item = await publishThroughReview(this.db, this.tenantId, id);
       return { id: item.id, status: item.status, publishedAt: item.publishedAt };
+    } catch (err) {
+      if (err instanceof ContentNotFoundError) throw new NotFoundException();
+      if (err instanceof InvalidTransitionError) throw new ConflictException(err.message);
+      throw err;
+    }
+  }
+
+  // The universal propose→approve gesture over the publish state machine
+  // (slice 3 — Proposal Queue). `propose` is the specialist offering work for
+  // review (draft→proposed); `approve`/`reject` are the human's decision on an
+  // item awaiting review. Each is idempotent on its terminal state and rejects
+  // illegal source states with 409; a missing/foreign item is 404 (RLS).
+  @Post(":id/propose")
+  @HttpCode(200)
+  propose(@Param("id") id: string): Promise<TransitionView> {
+    return this.transition(() => applyTransition(this.db, this.tenantId, id, "propose"));
+  }
+
+  @Post(":id/approve")
+  @HttpCode(200)
+  approve(@Param("id") id: string): Promise<TransitionView> {
+    return this.transition(() => decideContentItem(this.db, this.tenantId, id, "approve"));
+  }
+
+  @Post(":id/reject")
+  @HttpCode(200)
+  reject(@Param("id") id: string): Promise<TransitionView> {
+    return this.transition(() => decideContentItem(this.db, this.tenantId, id, "reject"));
+  }
+
+  private async transition(run: () => Promise<ContentItemRow>): Promise<TransitionView> {
+    try {
+      const item = await run();
+      return { id: item.id, type: item.type, status: item.status, title: item.title };
     } catch (err) {
       if (err instanceof ContentNotFoundError) throw new NotFoundException();
       if (err instanceof InvalidTransitionError) throw new ConflictException(err.message);

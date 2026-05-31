@@ -68,12 +68,17 @@ asset by id), never HTML (`@blogs/contracts` `blockSchema`). Surfaces the
 persistent companion, not a gate: AI brings craft, the human brings lived
 experience + voice (E-E-A-T). Editing nudges the score up via the flags.
 
-### Surface 3 — Proposal Queue (slice 3)
-The propose→approve gesture made first-class: a queue of specialist proposals —
-content drafts AND distribution (channel posts) — that the human **approves /
-edits / rejects**. Reuses the publish state machine and the **Phase-2.5 approval
-gate** (`POST /articles/:id/posts/:postId/approve|reject`, the same transitions
-`/studio` step 5 already drives). The queue is the hub-native home of that gate.
+### Surface 3 — Proposal Queue (slice 3) — BUILT
+The propose→approve gesture made first-class: a queue of the content items
+**awaiting a human decision** — those in `proposed` / `review` — that the human
+**approves / rejects / edits**. Approve/reject reuse the publish state machine
+via a thin **content-item decision endpoint** (`POST /articles/:id/approve` walks
+proposed→review→approved; `POST /articles/:id/reject` = requestChanges→draft;
+`POST /articles/:id/propose` feeds the queue), all over `transitionContentItem`.
+On a decision the item leaves the queue (re-fetch). **Edit** opens the slice-2
+Block Editor (`/editor?id=<id>`). The Phase-2.5 channel-post approval gate
+(`POST /articles/:id/posts/:postId/approve|reject`) remains available for the
+distribution side and can be folded into the queue later.
 
 ### Surface 4 — Settings (slice 4)
 Brand voice, **per-specialist autonomy knob** and channels.

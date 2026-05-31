@@ -9,6 +9,8 @@ export {
   updateContentItem,
   transitionContentItem,
   applyTransition,
+  decideContentItem,
+  type ProposalDecision,
   publishContentItem,
   publishThroughReview,
   ContentNotFoundError,

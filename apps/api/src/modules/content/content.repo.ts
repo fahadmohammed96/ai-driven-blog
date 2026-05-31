@@ -126,6 +126,45 @@ export function publishContentItem(db: Db, tenantId: string, id: string): Promis
   return applyTransition(db, tenantId, id, "publish");
 }
 
+/**
+ * The legal chain an item awaiting a human decision walks to reach 'approved'.
+ * `proposed` first enters `review`, then is approved — the human's "approve" on
+ * the Proposal Queue (slice 3) collapses that chain into one gesture.
+ */
+const APPROVE_PATH: Partial<Record<PublicationStatus, PublicationEvent>> = {
+  proposed: "startReview",
+  review: "approve",
+};
+
+export type ProposalDecision = "approve" | "reject";
+
+/**
+ * Apply a human decision to a content item awaiting review (status `proposed`
+ * or `review`) over the publish state machine, atomically and tenant-scoped
+ * (RLS). `approve` walks it to `approved` through the legal chain
+ * (proposed→review→approved); `reject` sends it back to `draft` (requestChanges).
+ * An illegal source state throws {@link InvalidTransitionError}; a missing/foreign
+ * item throws {@link ContentNotFoundError}.
+ */
+export async function decideContentItem(
+  db: Db,
+  tenantId: string,
+  id: string,
+  decision: ProposalDecision,
+): Promise<ContentItemRow> {
+  return withTenant(db, tenantId, async (tx) => {
+    let item = await getContentItem(tx, id);
+    if (!item) throw new ContentNotFoundError(id);
+    if (decision === "reject") return transitionContentItem(tx, id, "requestChanges");
+    while (item.status !== "approved") {
+      const event = APPROVE_PATH[item.status as PublicationStatus];
+      if (!event) throw new InvalidTransitionError(item.status as PublicationStatus, "approve");
+      item = await transitionContentItem(tx, id, event);
+    }
+    return item;
+  });
+}
+
 /** Event that advances each non-terminal status toward 'published'. */
 const ADVANCE: Partial<Record<PublicationStatus, PublicationEvent>> = {
   draft: "propose",
