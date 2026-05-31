@@ -15,13 +15,19 @@ export function renderSystemPrompt(voice: BrandVoice): string {
   ].join(" ");
 }
 
-export function buildPrompt(brief: string, context: string[]): string {
+export function buildPrompt(brief: string, context: string[], feedbackHint?: string): string {
   const ctx = context.length
     ? `Contesto dai contenuti dell'utente:\n${context
         .map((c, i) => `[${i + 1}] ${c}`)
         .join("\n")}\n\n`
     : "";
-  return `${ctx}Brief: ${brief}\n\nScrivi una bozza di articolo.`;
+  // The metric-derived hint from the feedback loop (Slice 2) — a REAL input that
+  // observably shapes the generation prompt. The LLM stays stubbed at the
+  // boundary; what changes is the instruction it receives (ADR-0026).
+  const hint = feedbackHint?.trim()
+    ? `Indicazione dai dati (loop di feedback): ${feedbackHint.trim()}\n\n`
+    : "";
+  return `${ctx}${hint}Brief: ${brief}\n\nScrivi una bozza di articolo.`;
 }
 
 export interface GenerateDraftDeps {
@@ -35,6 +41,17 @@ export interface GenerateDraftInput {
   brief: string;
   voice: BrandVoice;
   k?: number;
+  /**
+   * Optional metric-derived hint from the feedback loop (Fase 4, Slice 2): the
+   * `promptHint` of a {@link ContentProposal} (e.g. "favour pinterest"). When
+   * present it is woven into the prompt so the next cycle's draft adapts to what
+   * performed — the loop changes WHAT is generated, the human still approves.
+   * TODO(debt): DEBT-014 — the live generation endpoint
+   * (`verticals/travel/itineraries.controller.ts`) does not yet pull this hint
+   * from `FeedbackService`; the bridge is here + tested, the auto-injection is
+   * the follow-up (tied to the autonomy engine).
+   */
+  feedbackHint?: string;
 }
 
 export interface DraftResult {
@@ -51,7 +68,7 @@ export async function generateDraft(
   const queryEmbedding = await deps.embedder.embed(input.brief);
   const usedContext = await deps.retrieve(input.tenantId, queryEmbedding, input.k ?? 3);
   const system = renderSystemPrompt(input.voice);
-  const prompt = buildPrompt(input.brief, usedContext);
+  const prompt = buildPrompt(input.brief, usedContext, input.feedbackHint);
   const draft = await deps.llm.complete({ system, prompt });
   return { draft, usedContext, system };
 }

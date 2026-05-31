@@ -35,6 +35,30 @@ interface Dashboard {
   ingestedAt: string | null;
 }
 
+// Mirrors @blogs/contracts NextProposal (feedback loop, Slice 2): the metric-
+// derived signal + the adapted next-cycle proposal.
+type Weight = "primary" | "secondary" | "deprioritize";
+interface ProposalEmphasis {
+  channel: string;
+  score: number;
+  weight: Weight;
+}
+interface NextProposal {
+  signal: { topChannel: string | null };
+  proposal: {
+    primaryChannel: string | null;
+    emphasis: ProposalEmphasis[];
+    promptHint: string;
+    rationale: string;
+  };
+}
+
+const WEIGHT_LABEL: Record<Weight, string> = {
+  primary: "primario",
+  secondary: "secondario",
+  deprioritize: "deprioritizzato",
+};
+
 /** Human label for a metric key (kept lightweight — the source of truth is the API). */
 function metricLabel(metric: string): string {
   return metric.replace(/_/g, " ");
@@ -47,6 +71,7 @@ function fmt(value: number): string {
 
 export default function AnalyticsSurface() {
   const [dash, setDash] = useState<Dashboard | null>(null);
+  const [next, setNext] = useState<NextProposal | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,12 +79,17 @@ export default function AnalyticsSurface() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const res = await fetch(`${API}/analytics`);
-      if (!res.ok) {
+      const [dashRes, nextRes] = await Promise.all([
+        fetch(`${API}/analytics`),
+        fetch(`${API}/feedback/proposal`),
+      ]);
+      if (!dashRes.ok) {
         setError("Caricamento metriche fallito");
         return;
       }
-      setDash((await res.json()) as Dashboard);
+      setDash((await dashRes.json()) as Dashboard);
+      // The feedback proposal is a soft enhancement — don't fail the page on it.
+      if (nextRes.ok) setNext((await nextRes.json()) as NextProposal);
     } catch {
       setError("Caricamento metriche fallito");
     } finally {
@@ -129,6 +159,49 @@ export default function AnalyticsSurface() {
         <p data-testid="analytics-error" style={{ color: color.danger }}>
           {error}
         </p>
+      )}
+
+      {/* Feedback loop (Slice 2): the next-cycle proposal adapted from the metrics
+          above — the AI proposes what to lean on next; the human still confirms. */}
+      {next && (
+        <Card testId="feedback-proposal">
+          <div style={{ display: "flex", alignItems: "center", gap: space.sm, marginBottom: space.sm }}>
+            <span style={{ fontWeight: 700, color: color.text }}>Prossimo ciclo — cosa propone l’AI</span>
+            {next.proposal.primaryChannel && (
+              <span
+                data-testid="feedback-primary-channel"
+                style={{
+                  fontSize: font.size.sm,
+                  fontWeight: 600,
+                  padding: `2px ${space.sm}`,
+                  borderRadius: radius.sm,
+                  background: color.accent,
+                  color: "#fff",
+                }}
+              >
+                {next.proposal.primaryChannel}
+              </span>
+            )}
+          </div>
+          <p data-testid="feedback-rationale" style={{ margin: `0 0 ${space.sm}`, color: color.textMuted, fontSize: font.size.sm }}>
+            {next.proposal.rationale}
+          </p>
+          {next.proposal.emphasis.length > 0 && (
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexWrap: "wrap", gap: space.sm }}>
+              {next.proposal.emphasis.map((e) => (
+                <li
+                  key={e.channel}
+                  data-testid="feedback-emphasis"
+                  data-channel={e.channel}
+                  data-weight={e.weight}
+                  style={{ fontSize: font.size.sm, color: color.textMuted }}
+                >
+                  <span style={{ color: color.text, fontWeight: 600 }}>{e.channel}</span> · {WEIGHT_LABEL[e.weight]} ({fmt(e.score)})
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       )}
 
       {empty && (

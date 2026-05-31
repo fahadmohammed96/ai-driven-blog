@@ -45,4 +45,30 @@ describe("generateDraft", () => {
     expect(llm.lastCall?.prompt).toContain("Tokyo ramen guide");
     expect(llm.lastCall?.prompt).toContain("cibo in Giappone");
   });
+
+  it("weaves the feedback-loop hint into the prompt when provided (Slice 2)", async () => {
+    const embedder = new HashingEmbedder();
+    const llm = new FakeLlm();
+    const voice: BrandVoice = { tone: "entusiasta", audience: "foodie" };
+
+    const without = await generateDraft(
+      { embedder, llm, retrieve: async () => [] },
+      { tenantId: "t1", brief: "Scrivi sul Giappone", voice },
+    );
+    expect(without.system).toBeTruthy();
+    expect(llm.lastCall?.prompt).not.toContain("loop di feedback");
+
+    await generateDraft(
+      { embedder, llm, retrieve: async () => [] },
+      {
+        tenantId: "t1",
+        brief: "Scrivi sul Giappone",
+        voice,
+        feedbackHint: 'Favorisci contenuti per il canale "pinterest".',
+      },
+    );
+    // The metric-derived hint is a real input the (stubbed) LLM now receives.
+    expect(llm.lastCall?.prompt).toContain("loop di feedback");
+    expect(llm.lastCall?.prompt).toContain("pinterest");
+  });
 });

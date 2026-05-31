@@ -20,5 +20,8 @@ import { createAnalyticsSources } from "./sources";
     AnalyticsService,
     { provide: ANALYTICS_SOURCES, useFactory: createAnalyticsSources },
   ],
+  // Exported so the feedback module (Slice 2) can read the cross-channel
+  // dashboard read-model through this service rather than the raw tables.
+  exports: [AnalyticsService],
 })
 export class AnalyticsModule {}
