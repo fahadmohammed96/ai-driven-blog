@@ -190,6 +190,49 @@ export const tenantSettings = pgTable("tenant_settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Affiliate hub (Fase 3): a trackable outbound link, tenant-scoped by RLS. The
+ * `/go/:code` redirector resolves a link by its short `code` (unique per tenant),
+ * optionally associated with an article (`contentItemId`) and a placement
+ * (`channel`). `targetUrl` is where the click is 302-redirected.
+ */
+export const affiliateLinks = pgTable(
+  "affiliate_links",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    code: text("code").notNull(),
+    targetUrl: text("target_url").notNull(),
+    contentItemId: uuid("content_item_id").references(() => contentItems.id),
+    channel: text("channel"),
+    label: text("label"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique("affiliate_links_tenant_code_unique").on(t.tenantId, t.code)],
+);
+
+/**
+ * Affiliate hub (Fase 3): one recorded click through the redirector. The link's
+ * associations (`contentItemId`, `channel`) are **snapshotted** at click time so
+ * counts segment per article / per channel even if the link is later re-pointed.
+ * Tenant-scoped by RLS.
+ */
+export const affiliateClicks = pgTable("affiliate_clicks", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  linkId: uuid("link_id")
+    .notNull()
+    .references(() => affiliateLinks.id),
+  contentItemId: uuid("content_item_id").references(() => contentItems.id),
+  channel: text("channel"),
+  clickedAt: timestamp("clicked_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")

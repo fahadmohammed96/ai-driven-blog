@@ -18,6 +18,8 @@ import {
   mediaAssets,
   itineraryStopPhotos,
   tenantSettings,
+  affiliateLinks,
+  affiliateClicks,
 } from "./schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -122,5 +124,21 @@ describe("runtime RLS via the least-privilege app role (DEBT-005)", () => {
     });
     expect(stored).toHaveLength(1);
     expect(stored[0]!.settings.specialistAutonomy.writer).toBe("manual");
+  });
+
+  // Same grant guard for the Fase-3 affiliate tables: the redirector inserts a
+  // click row and the read endpoints select from both tables as the app role.
+  it("can write+read affiliate_links and affiliate_clicks as the app role (grants present)", async () => {
+    const clicks = await withTenant(appDb, TENANT_A, async (tx) => {
+      const [link] = await tx
+        .insert(affiliateLinks)
+        .values({ tenantId: TENANT_A, code: "grant-check", targetUrl: "https://example.com/g" })
+        .returning();
+      await tx
+        .insert(affiliateClicks)
+        .values({ tenantId: TENANT_A, linkId: link!.id, channel: "blog" });
+      return tx.select().from(affiliateClicks);
+    });
+    expect(clicks.length).toBeGreaterThan(0);
   });
 });

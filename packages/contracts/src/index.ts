@@ -17,3 +17,4 @@ export * from "./publication";
 export * from "./channel";
 export * from "./newsletter";
 export * from "./settings";
+export * from "./affiliate";

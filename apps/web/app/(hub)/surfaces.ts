@@ -2,7 +2,8 @@
  * The content-hub toolbox: the 4 surfaces + the hub entry, modelled as
  * INDEPENDENT sections (ADR-0020/0021: "toolbox, not wizard"). Order here is
  * display order in the nav rail, NOT a required sequence — the user picks any
- * surface in any order. All four surfaces are now built (slices 1–4).
+ * surface in any order. The content-hub surfaces are built (slices 1–4); the
+ * Affiliate hub joins them in Phase 3 (monetization).
  */
 export interface Surface {
   /** Route segment under the (hub) group. */
@@ -46,5 +47,11 @@ export const SURFACES: Surface[] = [
     label: "Settings",
     navTestId: "nav-settings",
     hint: "Brand voice, autonomia per specialista, canali.",
+  },
+  {
+    href: "/affiliates",
+    label: "Affiliates",
+    navTestId: "nav-affiliates",
+    hint: "Link di affiliazione tracciati: /go/:code conta i click per link, articolo e canale.",
   },
 ];

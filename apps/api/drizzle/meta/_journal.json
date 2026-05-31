@@ -57,6 +57,13 @@
       "when": 1780242129151,
       "tag": "0007_green_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1780244722149,
+      "tag": "0008_lonely_post",
+      "breakpoints": true
     }
   ]
 }

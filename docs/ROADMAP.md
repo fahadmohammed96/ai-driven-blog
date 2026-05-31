@@ -57,7 +57,7 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 > **Content-hub UI COMPLETA.** Quattro superfici costruite + journey cross-surface scritta test-first. Suite veloci verdi in locale (typecheck · lint · unit/arch · HTTP swc · integration Testcontainers); la **conductor esegue il gate E2E**. Follow-up registrati: **DEBT-010** (la generazione legga la brand voice dalle Settings invece della costante `FOUNDER_VOICE`); autonomia = stub (motore reale → debito *a quel punto*); proposte di distribuzione (channel-post) integrabili nella stessa coda; onboarding OAuth canale reale = **DEBT-008**.
 
 ## Fase 3 — Monetizzazione & servizi
-- [ ] **Hub affiliazioni** + **redirector `/go/`** + tracking click. **Accettazione:** un click passa dal redirector e viene contato per link/articolo/canale.
+- [x] **Hub affiliazioni** + **redirector `/go/`** + tracking click. **Accettazione:** un click passa dal redirector e viene contato per link/articolo/canale. *(Modulo `modules/monetization`: `affiliate_links` + `affiliate_clicks` con RLS + grant runtime; `/affiliates` (CRUD + conteggi per link/articolo/canale) e `/go/:code` (302 + click snapshottato) — [ADR-0022](adr/0022-affiliate-hub-redirector.md), [design](design/monetization.md). HTTP + integration RLS verdi; superficie `/affiliates` nella toolbox; E2E `affiliates.spec.ts` scritta test-first.)*
 - [ ] **Commerce: `Trip` + `Departure` + booking a posti** (waitlist) + Stripe (test mode). **Accettazione:** journey *lancio partenza → prenoto posto → acconto → conferma* verde.
 - [ ] **Pipeline su misura** (CRM: richiesta → proposta AI → acconto → conferma) + **instradamento WhatsApp/mail**. **Accettazione:** un lead percorre la pipeline; itinerario consegnato nel portale cliente.
 
