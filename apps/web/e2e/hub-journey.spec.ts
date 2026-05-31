@@ -71,10 +71,15 @@ test("hub journey: one coherent product across the four independent tools", asyn
 
   // 1) LIBRARY — open it from the toolbox; the seeded article shows with a draft
   //    badge. The Library → Editor navigation contract is /editor?id=<id>.
+  //    NB: seeding creates BOTH an itinerary and the article generated from it,
+  //    with the same title → two Library rows. Scope to the ARTICLE row
+  //    (data-type="article") — that's the item we open in the Editor.
   await nav.getByTestId("nav-library").click();
   await expect(page).toHaveURL(/\/library$/);
   await expect(page.getByTestId("library-header")).toBeVisible();
-  const libItem = page.getByTestId("library-item").filter({ hasText: articleTitle });
+  const libItem = page
+    .locator('[data-testid="library-item"][data-type="article"]')
+    .filter({ hasText: articleTitle });
   await expect(libItem).toBeVisible();
   await expect(libItem.getByTestId("state-badge-draft")).toBeVisible();
 
