@@ -51,8 +51,14 @@ misurato). `unattributed` non è mai un canale da raccomandare.
   A→X / B→Y e isolamento per-tenant, con la sola `SELECT` su `metric_snapshots`
   → prova che il loop gira sotto RLS least-privilege senza grant nuovi.
 - **e2e** `feedback.spec.ts` (scritta test-first; la conductor esegue il gate):
-  self-seed click su canale unico → `/analytics` → aggiorna → la card "Prossimo
-  ciclo" rende quel canale **primario**, con rationale che lo cita.
+  **before/after** — ingest baseline → il canale unico è **assente** dal piano →
+  self-seed click su canale unico → ri-ingest → il canale **entra** nel piano
+  ranked della proposta. Asserzione di *cambiamento* (le metriche cambiano → la
+  proposta cambia), non di dominanza: nel sistema completo il baseline stub di
+  GA4/SC (`organic` ~21k = sessions+users+clicks+impressions) resta correttamente
+  il canale **primario** — pochi click freschi non devono (e non dovrebbero)
+  scavalcare migliaia di sessioni organiche; il loop che li classifica sotto
+  `organic` è il comportamento corretto.
 
 ## Superficie `/analytics` — card "Prossimo ciclo — cosa propone l'AI"
 Riusa `Card`/tokens. Mostra canale primario (badge), `rationale`, e l'emphasis
