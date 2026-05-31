@@ -49,6 +49,7 @@ const APP_RW_TABLES = [
   "departures",
   "bookings",
   "leads",
+  "metric_snapshots",
 ];
 
 /**

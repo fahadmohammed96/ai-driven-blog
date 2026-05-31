@@ -25,6 +25,7 @@ import {
   departures,
   bookings,
   leads,
+  metricSnapshots,
 } from "./schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -206,5 +207,32 @@ describe("runtime RLS via the least-privilege app role (DEBT-005)", () => {
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]!.status).toBe("ai_drafted");
+  });
+
+  // Same grant guard for the Fase-4 analytics table: ingestion deletes + inserts
+  // metric_snapshots, and the dashboard selects from it, as the app role. A
+  // missing grant = "permission denied for table metric_snapshots" at runtime.
+  it("can write+read metric_snapshots as the app role (grant present)", async () => {
+    const rows = await withTenant(appDb, TENANT_A, async (tx) => {
+      await tx.insert(metricSnapshots).values({
+        tenantId: TENANT_A,
+        source: "affiliate",
+        channel: "blog",
+        metric: "clicks",
+        value: 3,
+      });
+      // Ingestion replaces a source's rows → the app role must also DELETE.
+      await tx.delete(metricSnapshots).where(eq(metricSnapshots.source, "affiliate"));
+      await tx.insert(metricSnapshots).values({
+        tenantId: TENANT_A,
+        source: "affiliate",
+        channel: "blog",
+        metric: "clicks",
+        value: 5,
+      });
+      return tx.select().from(metricSnapshots).where(eq(metricSnapshots.source, "affiliate"));
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.value).toBe(5);
   });
 });

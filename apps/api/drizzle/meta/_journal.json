@@ -78,6 +78,13 @@
       "when": 1780257199090,
       "tag": "0010_cuddly_human_cannonball",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1780258413685,
+      "tag": "0011_acoustic_patch",
+      "breakpoints": true
     }
   ]
 }

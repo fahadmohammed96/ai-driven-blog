@@ -66,4 +66,10 @@ export const SURFACES: Surface[] = [
     navTestId: "nav-crm",
     hint: "Richieste su misura: l'AI propone, tu approvi prima dell'invio, acconto e consegna nel portale cliente.",
   },
+  {
+    href: "/analytics",
+    label: "Analytics",
+    navTestId: "nav-analytics",
+    hint: "Dashboard unificata cross-canale: affiliazioni/newsletter/social/contenuti (reali) + GA4 e Search Console (stub).",
+  },
 ];

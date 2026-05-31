@@ -20,3 +20,4 @@ export * from "./settings";
 export * from "./affiliate";
 export * from "./commerce";
 export * from "./crm";
+export * from "./analytics";

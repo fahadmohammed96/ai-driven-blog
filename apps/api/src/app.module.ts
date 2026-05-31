@@ -11,6 +11,7 @@ import { SettingsModule } from "./modules/settings";
 import { MonetizationModule } from "./modules/monetization";
 import { CommerceModule } from "./modules/commerce";
 import { CrmModule } from "./modules/crm";
+import { AnalyticsModule } from "./modules/analytics";
 import { TravelModule } from "./verticals/travel/travel.module";
 
 @Module({
@@ -25,6 +26,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     MonetizationModule,
     CommerceModule,
     CrmModule,
+    AnalyticsModule,
     TravelModule,
   ],
   controllers: [AppController],

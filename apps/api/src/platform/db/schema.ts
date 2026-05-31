@@ -337,6 +337,28 @@ export const leads = pgTable(
   (t) => [unique("leads_portal_token_unique").on(t.portalToken)],
 );
 
+/**
+ * Unified analytics (Fase 4, slice 1): one cross-channel metric data point.
+ * Each row is `(source, channel, metric, value, period)` optionally tied to a
+ * content item — written by the analytics ingestion from **internal** sources we
+ * already own (affiliate clicks, subscribers, channel-posts, content) and from
+ * **external** sources stubbed at the boundary (GA4, Search Console). Ingestion
+ * replaces a source's rows on each run (idempotent snapshot). Tenant-scoped by RLS.
+ */
+export const metricSnapshots = pgTable("metric_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  source: text("source").notNull(),
+  channel: text("channel"),
+  metric: text("metric").notNull(),
+  value: doublePrecision("value").notNull(),
+  period: text("period").notNull().default("all"),
+  contentItemId: uuid("content_item_id").references(() => contentItems.id),
+  capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")
