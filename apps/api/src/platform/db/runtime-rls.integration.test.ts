@@ -11,7 +11,14 @@ import { Pool } from "pg";
 import { createDb, type Db } from "./client";
 import { withTenant } from "./tenant";
 import { ensureAppRole, isRlsBypassed } from "./bootstrap";
-import { contentItems, itineraryStops, mediaAssets, itineraryStopPhotos } from "./schema";
+import { DEFAULT_TENANT_SETTINGS } from "@blogs/contracts";
+import {
+  contentItems,
+  itineraryStops,
+  mediaAssets,
+  itineraryStopPhotos,
+  tenantSettings,
+} from "./schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(here, "../../../drizzle");
@@ -100,5 +107,20 @@ describe("runtime RLS via the least-privilege app role (DEBT-005)", () => {
       return links.length;
     });
     expect(linkCount).toBeGreaterThan(0);
+  });
+
+  // Regression guard: every tenant-scoped table the runtime touches must be in
+  // bootstrap's APP_RW_TABLES, or the app role gets "permission denied" at
+  // runtime (slice 4: tenant_settings was missing → settings GET 500 in e2e).
+  it("can write+read tenant_settings as the app role (grant present)", async () => {
+    const stored = await withTenant(appDb, TENANT_A, async (tx) => {
+      await tx.insert(tenantSettings).values({
+        tenantId: TENANT_A,
+        settings: DEFAULT_TENANT_SETTINGS,
+      });
+      return tx.select().from(tenantSettings);
+    });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.settings.specialistAutonomy.writer).toBe("manual");
   });
 });

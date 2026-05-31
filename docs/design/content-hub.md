@@ -80,13 +80,27 @@ Block Editor (`/editor?id=<id>`). The Phase-2.5 channel-post approval gate
 (`POST /articles/:id/posts/:postId/approve|reject`) remains available for the
 distribution side and can be folded into the queue later.
 
-### Surface 4 — Settings (slice 4)
-Brand voice, **per-specialist autonomy knob** and channels.
+### Surface 4 — Settings (slice 4) — BUILT
+Brand voice, **per-specialist autonomy knob** and channels — tenant-scoped and
+persisted. The page loads via `GET /settings`, edits brand voice (tone +
+audience), the four autonomy selects, and the channel toggles, and saves via
+`PUT /settings`. Persistence lives in a new `tenant_settings` table (one JSONB
+row per tenant, **RLS** on `tenant_id`, runtime grants for the app role) behind
+the tenancy guard; `GET` returns defaults (manual autonomy everywhere) when no
+row exists yet. Settings shape (`@blogs/contracts` `TenantSettings`):
+`{ brandVoice: { tone, audience }, specialistAutonomy: { writer, seo, social,
+email }, channels: { channel, enabled }[] }`.
 
+- **Brand voice reuses the AI pipeline's `{ tone, audience }`** shape
+  (`platform/ai/pipeline.ts`) — Settings make it per-tenant editable instead of
+  the hard-coded `FOUNDER_VOICE` constant.
 - Autonomy knob = **stub**: `manual / semi-auto / auto-within-limits`, **default
-  manual** for every specialist. Slice 4 persists the choice; wiring beyond
-  persistence (an actual rules/automation engine) is later work — recorded as
-  debt at that point, not now.
+  manual** for every specialist; the UI labels it as informational (takes effect
+  in a later build). Slice 4 persists the choice; wiring beyond persistence (an
+  actual rules/automation engine) is later work — recorded as debt at that
+  point, not now.
+- Channels are **intent only** (which channels to use); real per-tenant OAuth/key
+  onboarding is **DEBT-008** (out of scope).
 
 ## 4. Navigation model — toolbox, not wizard
 

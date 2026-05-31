@@ -10,7 +10,7 @@ import {
   date,
   unique,
 } from "drizzle-orm/pg-core";
-import type { Block, ChannelPost } from "@blogs/contracts";
+import type { Block, ChannelPost, TenantSettings } from "@blogs/contracts";
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -175,6 +175,20 @@ export const connectorCredentials = pgTable(
   },
   (t) => [unique("connector_credentials_tenant_connector_unique").on(t.tenantId, t.connector)],
 );
+
+/**
+ * Tenant settings (content-hub, slice 4): one row per tenant holding the
+ * founder's configuration — brand voice, per-specialist autonomy (STUB), and
+ * channels — as a validated JSONB blob. Tenant-scoped by RLS; `tenant_id` is the
+ * primary key (exactly one settings row per tenant, upserted on save).
+ */
+export const tenantSettings = pgTable("tenant_settings", {
+  tenantId: uuid("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id),
+  settings: jsonb("settings").$type<TenantSettings>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),

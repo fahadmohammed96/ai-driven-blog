@@ -50,6 +50,13 @@
       "when": 1780156174676,
       "tag": "0006_eminent_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1780242129151,
+      "tag": "0007_green_texas_twister",
+      "breakpoints": true
     }
   ]
 }

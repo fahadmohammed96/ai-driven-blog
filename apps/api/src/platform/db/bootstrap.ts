@@ -42,6 +42,7 @@ const APP_RW_TABLES = [
   "subscribers",
   "subscriptions",
   "connector_credentials",
+  "tenant_settings",
 ];
 
 /**

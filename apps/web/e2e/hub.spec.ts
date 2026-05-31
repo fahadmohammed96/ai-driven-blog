@@ -13,7 +13,7 @@ const SURFACES = [
   { nav: "nav-library", path: "/library", surface: "surface-library", slice: 1, built: "library-list" },
   { nav: "nav-editor", path: "/editor", surface: "surface-editor", slice: 2, built: "editor-header" },
   { nav: "nav-proposals", path: "/proposals", surface: "surface-proposals", slice: 3, built: "proposals-header" },
-  { nav: "nav-settings", path: "/settings", surface: "surface-settings", slice: 4 },
+  { nav: "nav-settings", path: "/settings", surface: "surface-settings", slice: 4, built: "settings-header" },
 ] as const;
 
 test("hub shell loads and the toolbox nav renders", async ({ page }) => {
@@ -35,14 +35,8 @@ test("each surface is reachable as an independent section via the toolbox", asyn
     await page.getByTestId("toolbox-nav").getByTestId(s.nav).click();
     await expect(page).toHaveURL(new RegExp(`${s.path}$`));
     await expect(page.getByTestId(s.surface)).toBeVisible();
-    if ("built" in s) {
-      // Real surface: assert its landmark, not the placeholder.
-      await expect(page.getByTestId(s.built)).toBeVisible();
-    } else {
-      await expect(page.getByTestId("surface-placeholder")).toContainText(
-        new RegExp(`slice ${s.slice}`, "i"),
-      );
-    }
+    // Every surface is now built (slices 1–4 landed): assert its real landmark.
+    await expect(page.getByTestId(s.built)).toBeVisible();
     // The toolbox nav persists on every surface (app-shell, not per-page chrome).
     await expect(page.getByTestId("toolbox-nav")).toBeVisible();
   }

@@ -7,6 +7,7 @@ import { ContentModule } from "./modules/content";
 import { AuthModule } from "./modules/auth";
 import { SocialModule } from "./modules/social";
 import { EmailModule } from "./modules/email";
+import { SettingsModule } from "./modules/settings";
 import { TravelModule } from "./verticals/travel/travel.module";
 
 @Module({
@@ -17,6 +18,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     AuthModule,
     SocialModule,
     EmailModule,
+    SettingsModule,
     TravelModule,
   ],
   controllers: [AppController],
