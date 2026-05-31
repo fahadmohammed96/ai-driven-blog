@@ -13,6 +13,7 @@ import { CommerceModule } from "./modules/commerce";
 import { CrmModule } from "./modules/crm";
 import { AnalyticsModule } from "./modules/analytics";
 import { FeedbackModule } from "./modules/feedback";
+import { OnboardingModule } from "./modules/onboarding";
 import { TravelModule } from "./verticals/travel/travel.module";
 
 @Module({
@@ -29,6 +30,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     CrmModule,
     AnalyticsModule,
     FeedbackModule,
+    OnboardingModule,
     TravelModule,
   ],
   controllers: [AppController],
