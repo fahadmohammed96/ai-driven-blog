@@ -7,8 +7,10 @@
 > intentionally **not committed** yet, so this doc records the decisions we build
 > against without touching the ADR log / PRODUCT.md.
 >
-> Status: **slice 0** (foundations + app-shell + placeholders) done. Surfaces fill
-> in over slices 1–4; slice 5 integrates.
+> Status: **COMPLETE** — all 5 slices landed. Foundations + app-shell (slice 0),
+> the four surfaces (slices 1–4) and the cross-surface integration + full hub
+> journey (slice 5) are built and green on the fast suites; the conductor runs the
+> e2e gate. See §9 (Integration) and §10 (Build summary).
 
 ## 1. What this is
 
@@ -60,13 +62,21 @@ Each row links into the Block Editor.
   and loads that item via `GET /articles/:id`. This is the stable navigation
   contract between Library and Editor.
 
-### Surface 2 — Block Editor (slice 2)
+### Surface 2 — Block Editor (slice 2) — BUILT
 Edits a ContentItem on the **canonical block model** — an ordered list of
 portable JSON blocks (`heading` / `paragraph` / `image` referencing a Media-DAM
 asset by id), never HTML (`@blogs/contracts` `blockSchema`). Surfaces the
 **authenticity meter** (`{ score, flags[] }`, as `/studio` already renders) as a
 persistent companion, not a gate: AI brings craft, the human brings lived
 experience + voice (E-E-A-T). Editing nudges the score up via the flags.
+
+- **Write path:** `PATCH /articles/:id` persists `title?` / `blocks?` behind the
+  tenant guard + RLS (validates `blocks` against `blocksSchema`; cross-tenant →
+  `404`), over the existing `updateContentItem` repo fn.
+- **Meter source:** `GET /articles/:id/authenticity` reuses
+  `platform/ai/measureAuthenticity` (the same measurer `/studio` uses) — no
+  client-side duplication. Re-fetched after each save. The reusable
+  `app/(hub)/AuthenticityMeter.tsx` renders `{ score, flags }`; it never blocks.
 
 ### Surface 3 — Proposal Queue (slice 3) — BUILT
 The propose→approve gesture made first-class: a queue of the content items
@@ -183,3 +193,76 @@ email }, channels: { channel, enabled }[] }`.
 - Business priority: **content engine first**; Trip/Departure/CRM (travel-sales,
   inbound) are **out of scope** (Phase-3 backend absent).
 - ADR-0020, `PRODUCT.md`, `docs/adr/README.md` are **not** modified in this build.
+
+## 9. Integration (slice 5) — one coherent hub + the cross-surface journey
+
+Slice 5 ties the four independent surfaces into a single product hub and proves
+it with one end-to-end journey. No new product feature — integration, polish,
+docs (see [ADR-0021](adr/0021-content-hub-ui.md)).
+
+- **Hub home as a real landing** (`/hub`): states the operating model up front —
+  *the AI agency proposes, the human confirms; toolbox, not wizard* — renders the
+  publish lifecycle as `StateBadge`s (`draft→proposed→review→approved→published`),
+  and lists the four tools as tiles that open directly in any order
+  (`hub-operating-model`, `hub-lifecycle`, `tile-nav-*`).
+- **Consistency pass:** every surface now exposes a `*-header` landmark
+  (`library/editor/proposals/settings-header`); the same `StateBadge` renders the
+  lifecycle wherever an item appears (hub, Library row, Editor header, Proposal
+  card); the same `AuthenticityMeter` is the Editor's counterweight. Tidied the
+  now-unused `slice` metadata off `surfaces.ts`.
+- **Cross-surface flows** connect cleanly and were verified end-to-end: Library
+  row → Editor (`/editor?id=`); Proposal **Edit** → the same Editor; Approve/
+  Reject ride the real state machine; Settings reachable from the toolbox.
+- **Legacy kept green:** `/studio` and `/newsletter` walking skeletons are
+  untouched; their e2e specs remain.
+
+### The full journey — `apps/web/e2e/hub-journey.spec.ts`
+ONE journey, self-seeded via the API (a generated article + a proposed item),
+exercising the hub as a toolbox (no forced order):
+
+1. `/hub` orients the founder (operating model + toolbox nav visible).
+2. **Library** (via nav): the seeded article shows with its `draft` badge.
+3. **Editor** (via the Library row → `/editor?id=`): edit title + a block, save;
+   the authenticity meter stays visible; the edit is verified persisted via API.
+4. **Proposal Queue** (jumped to directly from the toolbox — independence): the
+   seeded proposal shows `proposed`; **Approve** advances it through the real
+   state machine and it leaves the queue (verified `approved` via API).
+5. **Settings** (via nav): change the brand-voice tone, save, **reload**, assert
+   it persisted.
+
+The toolbox rail persists across every surface (app-shell chrome). Per the WSL
+harness constraint, e2e is **written test-first here but run by the conductor**;
+slice 5 is verified locally on the fast suites only.
+
+### Operating-model mapping (ADR-0020 → the UI)
+| ADR-0020 idea | Where it lives in the hub |
+|---|---|
+| Agency **proposes → human confirms** | Proposal Queue (approve/edit/reject) + the universal `StateBadge` everywhere |
+| **Toolbox, not wizard** | persistent `ToolboxNav` + hub tiles; surfaces independent, navigable in any order; journey asserts no forced sequence |
+| **Authenticity = counterweight** | `AuthenticityMeter` in the Editor (informational, never a gate) |
+| **Automation compass** (outbound = approve-then-trust) | per-specialist **autonomy stub** in Settings (default manual) |
+| Inbound (client mail/sales) | **out of scope** — Phase-3 backend absent |
+
+## 10. Build summary & known follow-ups
+
+**Built (slices 0–5):** the content-hub app-shell + toolbox nav; four surfaces —
+**Library** (`GET /articles` list read-model), **Block Editor** (`PATCH
+/articles/:id` + `GET /articles/:id/authenticity`), **Proposal Queue** (content
+decision endpoints `propose/approve/reject` over the state machine), **Settings**
+(`GET`/`PUT /settings` + `tenant_settings` RLS table); a reusable design system
+(`src/ui`), `StateBadge`, `AuthenticityMeter`; per-surface e2e specs + the full
+cross-surface journey. Reuse-over-reinvent throughout: no new framework, the same
+inline-style + tokens convention as the legacy surfaces.
+
+**Known follow-ups (not blocking; for the founder / Phase 3):**
+- **Brand-voice loop** — the travel generator still reads the hard-coded
+  `FOUNDER_VOICE` constant; Settings now persists the voice, so generation should
+  read it from `getTenantSettings`. Recorded as **DEBT-010**.
+- **Autonomy engine** — the per-specialist knob is a persistence-only stub; a real
+  rules/automation engine is later work (record debt at *that* point per ADR-0020).
+- **Distribution proposals** — channel-post approve/reject (Phase-2.5 gate) can be
+  folded into the same Proposal Queue.
+- **Channel onboarding** — real per-tenant OAuth/key onboarding is **DEBT-008**.
+- **Contracts in the web app** — `apps/web` still mirrors `PublicationStatus` /
+  settings types locally; a later slice can add the `@blogs/contracts` workspace
+  dep and import directly.

@@ -65,6 +65,7 @@ export default function LibrarySurface() {
   return (
     <div data-testid="surface-library">
       <PageHeader
+        testId="library-header"
         title="Library"
         subtitle="Tutti i contenuti, filtrabili, con il badge di stato dalla macchina a stati di pubblicazione."
       />

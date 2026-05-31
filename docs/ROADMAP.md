@@ -44,6 +44,18 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 
 > **Fase 2.5 COMPLETA.** Entrambi gli slice verdi in CI (PR #3 + #4). Il consent-flow **OAuth per collegare un canale reale** resta su **DEBT-008** (trigger: *primo canale reale*) — fuori da questo task: qui i connettori sono stub al confine.
 
+## Content-hub UI — il prodotto vero (follow-up Fase 2.5)
+*Obiettivo: la UI di prodotto come **content-hub** che realizza il modello operativo (ADR-0020 → [ADR-0021](adr/0021-content-hub-ui.md)): "l'agenzia AI propone → l'umano conferma; cassetta degli attrezzi, non procedura guidata". Quattro superfici indipendenti su un hub stabile; `/studio` + `/newsletter` restano walking skeleton verdi. **Accettazione = journey E2E verdi** (la conductor esegue il gate E2E in questo setup WSL; gli slice sono verificati in locale sulle suite veloci e con la spec E2E scritta test-first).*
+
+- [x] **Slice 0 — Fondamenta + Design**: spec di design/IA, app-shell hub + toolbox nav, design-system baseline (tokens + primitive), 4 placeholder di superficie. **Accettazione:** E2E smoke *l'hub carica + la nav funziona* + ogni superficie raggiungibile come sezione indipendente. ✓
+- [x] **Slice 1 — Library**: lista/filtri dei ContentItem + badge di stato. **Accettazione:** E2E *la library elenca gli item con il badge giusto e i filtri restringono* (read-model `GET /articles`, isolamento RLS provato). ✓ *(DEBT-009 → PAID.)*
+- [x] **Slice 2 — Block Editor**: editor sul modello a blocchi canonico + misuratore di autenticità (contrappeso, mai cancello). **Accettazione:** E2E *apri → modifica titolo+blocco → salva → persiste al reload, meter visibile* (`PATCH /articles/:id` + `GET /articles/:id/authenticity`). ✓
+- [x] **Slice 3 — Proposal Queue**: il gesto propose→approve/edit/reject sulla macchina a stati esistente. **Accettazione:** E2E *approva avanza l'item e lascia la coda; rifiuta lo rimanda a draft* (endpoint decisione `propose/approve/reject`). ✓
+- [x] **Slice 4 — Settings**: brand voice + autonomia per specialista (stub) + canali, tenant-scoped e persistiti. **Accettazione:** E2E *modifica una setting → salva → persiste al reload* (`GET`/`PUT /settings`, tabella `tenant_settings` con RLS + grant runtime). ✓
+- [x] **Slice 5 — Integration & polish**: hub coerente (landing con il modello operativo, nav/header/badge/meter consistenti), **journey cross-surface completa**, docs/ADR finalizzati. **Accettazione:** E2E *un'unica journey dall'hub: Library → Editor (modifica+salva, meter) → Proposal Queue (decisione) → Settings (persiste)*, ordine libero (toolbox). ✓
+
+> **Content-hub UI COMPLETA.** Quattro superfici costruite + journey cross-surface scritta test-first. Suite veloci verdi in locale (typecheck · lint · unit/arch · HTTP swc · integration Testcontainers); la **conductor esegue il gate E2E**. Follow-up registrati: **DEBT-010** (la generazione legga la brand voice dalle Settings invece della costante `FOUNDER_VOICE`); autonomia = stub (motore reale → debito *a quel punto*); proposte di distribuzione (channel-post) integrabili nella stessa coda; onboarding OAuth canale reale = **DEBT-008**.
+
 ## Fase 3 — Monetizzazione & servizi
 - [ ] **Hub affiliazioni** + **redirector `/go/`** + tracking click. **Accettazione:** un click passa dal redirector e viene contato per link/articolo/canale.
 - [ ] **Commerce: `Trip` + `Departure` + booking a posti** (waitlist) + Stripe (test mode). **Accettazione:** journey *lancio partenza → prenoto posto → acconto → conferma* verde.
