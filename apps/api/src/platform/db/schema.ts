@@ -233,6 +233,73 @@ export const affiliateClicks = pgTable("affiliate_clicks", {
   clickedAt: timestamp("clicked_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * Commerce (Fase 3, motion "Programmato"): a sellable **Trip** built on an
+ * existing Itinerary content item. Price/deposit are integer minor units;
+ * `currency` is ISO-4217. Tenant-scoped by RLS.
+ */
+export const trips = pgTable("trips", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  itineraryId: uuid("itinerary_id")
+    .notNull()
+    .references(() => contentItems.id),
+  title: text("title").notNull(),
+  theme: text("theme"),
+  priceCents: integer("price_cents").notNull(),
+  depositCents: integer("deposit_cents").notNull(),
+  currency: text("currency").notNull().default("eur"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Commerce: a scheduled **Departure** of a Trip — a date plus a seat capacity.
+ * The waitlist is derived (bookings with status `waitlisted`). Tenant-scoped.
+ */
+export const departures = pgTable("departures", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  tripId: uuid("trip_id")
+    .notNull()
+    .references(() => trips.id),
+  departureDate: date("departure_date", { mode: "string" }).notNull(),
+  seats: integer("seats").notNull(),
+  status: text("status").notNull().default("scheduled"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * Commerce: a **Booking** — a customer's seat on a Departure, driven by the
+ * booking state machine (`reserved → deposit_pending → confirmed`, or
+ * `waitlisted` when the Departure is full). `depositCents`/`currency` are
+ * snapshotted from the Trip at booking time; `paymentRef` is the PaymentPort
+ * reference once the deposit is collected. Tenant-scoped by RLS.
+ */
+export const bookings = pgTable("bookings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  departureId: uuid("departure_id")
+    .notNull()
+    .references(() => departures.id),
+  customerEmail: text("customer_email").notNull(),
+  customerName: text("customer_name"),
+  status: text("status").notNull().default("reserved"),
+  depositCents: integer("deposit_cents").notNull(),
+  currency: text("currency").notNull().default("eur"),
+  paymentRef: text("payment_ref"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+});
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")

@@ -45,6 +45,9 @@ const APP_RW_TABLES = [
   "tenant_settings",
   "affiliate_links",
   "affiliate_clicks",
+  "trips",
+  "departures",
+  "bookings",
 ];
 
 /**

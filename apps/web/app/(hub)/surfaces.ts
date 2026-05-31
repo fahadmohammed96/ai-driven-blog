@@ -54,4 +54,10 @@ export const SURFACES: Surface[] = [
     navTestId: "nav-affiliates",
     hint: "Link di affiliazione tracciati: /go/:code conta i click per link, articolo e canale.",
   },
+  {
+    href: "/trips",
+    label: "Trips",
+    navTestId: "nav-trips",
+    hint: "Viaggi programmati: lancia partenze, prenota un posto, versa l'acconto (waitlist se pieno).",
+  },
 ];

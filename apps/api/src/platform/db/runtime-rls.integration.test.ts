@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -20,6 +21,9 @@ import {
   tenantSettings,
   affiliateLinks,
   affiliateClicks,
+  trips,
+  departures,
+  bookings,
 } from "./schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -140,5 +144,44 @@ describe("runtime RLS via the least-privilege app role (DEBT-005)", () => {
       return tx.select().from(affiliateClicks);
     });
     expect(clicks.length).toBeGreaterThan(0);
+  });
+
+  // Same grant guard for the Fase-3 commerce tables: the booking flow inserts
+  // trips/departures/bookings and updates bookings as the app role.
+  it("can write+read trips, departures and bookings as the app role (grants present)", async () => {
+    const rows = await withTenant(appDb, TENANT_A, async (tx) => {
+      const [ci] = await tx
+        .insert(contentItems)
+        .values({ tenantId: TENANT_A, type: "itinerary", title: "Commerce grant" })
+        .returning();
+      const [trip] = await tx
+        .insert(trips)
+        .values({
+          tenantId: TENANT_A,
+          itineraryId: ci!.id,
+          title: "Grant trip",
+          priceCents: 100_000,
+          depositCents: 20_000,
+        })
+        .returning();
+      const [dep] = await tx
+        .insert(departures)
+        .values({ tenantId: TENANT_A, tripId: trip!.id, departureDate: "2026-08-01", seats: 4 })
+        .returning();
+      const [booking] = await tx
+        .insert(bookings)
+        .values({
+          tenantId: TENANT_A,
+          departureId: dep!.id,
+          customerEmail: "grant@a.com",
+          status: "reserved",
+          depositCents: 20_000,
+        })
+        .returning();
+      await tx.update(bookings).set({ status: "confirmed" });
+      return tx.select().from(bookings).where(eq(bookings.id, booking!.id));
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("confirmed");
   });
 });

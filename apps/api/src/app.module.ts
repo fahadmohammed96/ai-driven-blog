@@ -9,6 +9,7 @@ import { SocialModule } from "./modules/social";
 import { EmailModule } from "./modules/email";
 import { SettingsModule } from "./modules/settings";
 import { MonetizationModule } from "./modules/monetization";
+import { CommerceModule } from "./modules/commerce";
 import { TravelModule } from "./verticals/travel/travel.module";
 
 @Module({
@@ -21,6 +22,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     EmailModule,
     SettingsModule,
     MonetizationModule,
+    CommerceModule,
     TravelModule,
   ],
   controllers: [AppController],

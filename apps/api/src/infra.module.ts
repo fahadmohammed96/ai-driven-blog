@@ -1,9 +1,10 @@
 import { Global, Module } from "@nestjs/common";
-import { DB, STORAGE, LLM, EMAIL } from "./platform/tokens";
+import { DB, STORAGE, LLM, EMAIL, PAYMENT } from "./platform/tokens";
 import { createDb } from "./platform/db/client";
 import { createLlmFromEnv } from "./platform/ai/llm";
 import { S3Storage } from "./modules/media";
 import { createEmailFromEnv } from "./modules/email";
+import { createPaymentFromEnv } from "./modules/commerce";
 
 function databaseUrl(): string {
   // Runtime connects as the least-privilege app role so RLS is enforced (DEBT-005).
@@ -34,7 +35,8 @@ function storageConfig() {
     { provide: STORAGE, useFactory: () => new S3Storage(storageConfig()) },
     { provide: LLM, useFactory: createLlmFromEnv },
     { provide: EMAIL, useFactory: createEmailFromEnv },
+    { provide: PAYMENT, useFactory: createPaymentFromEnv },
   ],
-  exports: [DB, STORAGE, LLM, EMAIL],
+  exports: [DB, STORAGE, LLM, EMAIL, PAYMENT],
 })
 export class InfraModule {}
