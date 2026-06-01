@@ -71,3 +71,32 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 > **Fase 4 COMPLETA.** I tre slice (4.1 analytics unificata, 4.2 loop di feedback, 4.3 hardening multi-tenant + onboarding tenant #2 + valutazione Graphify) sono verdi sulle suite veloci in locale (typecheck · lint · unit/arch · HTTP swc · integration Testcontainers). Debt-gate finale: **DEBT-005 PAID** (rinforzato da audit eseguibile). Aperti, non scaduti: DEBT-006/007/008/010/011/012/013/014/015 — con trigger su primo canale/incasso/invio reale o sul motore di autonomia / login del tenant #2.
 
 > **🏁 ROADMAP (Fasi 0–4) COMPLETA.** Dalle fondamenta (monorepo, RLS, AI) → il cuneo itinerario→articolo → distribuzione → content-hub UI → monetizzazione & servizi → intelligenza (analytics, feedback, hardening multi-tenant). Il prodotto è multi-tenant, AI-first, con "l'AI propone, l'umano conferma" come gate strutturale, e un secondo tenant onboardabile e isolato. I follow-up rimasti sono **integrazioni reali al confine** (canali/pagamenti/notifiche/analytics esterni) e l'**operatività del tenant #2** (login/risoluzione runtime), tutti registrati in TECH_DEBT con trigger.
+
+## Piattaforma agentica (trasformazione tool-calling) — follow-up Fase 4
+*Obiettivo: l'AI da **single-shot** a **agenzia di agenti tool-calling specializzati**, **propose-only** e **cost-controlled** ([ADR-0029](adr/0029-agentic-platform.md); implementa il modello operativo **ADR-0020**, in revisione). Build slice-by-slice via harness headless su WSL; il **conductor esegue il gate** (typecheck·lint·unit·HTTP·integration·**e2e**). Ogni slice: test-first, propose-only (riusa la macchina a stati ADR-0015), DEBT con trigger.*
+
+**Runtime & costo**
+- [x] **R1-A — LlmPort + model tiering** (fast/balanced/powerful → Haiku/Sonnet/Opus; stima worst-case per il breaker). ✓
+- [x] **R1-B — Metering + circuit-breaker budget a 2 livelli** (`ai_usage_events` RLS; `budgetUsdMonthly` default $50). ✓
+- [x] **R1-C — Provider/chiave per-tenant (BYOK)** (credenziale `llm_anthropic` cifrata AES-256-GCM, fallback piattaforma). ✓
+
+**Agenti**
+- [x] **A1-core — AgentRunner** (loop ReAct limitato, idempotente, `Proposal<T>`, gate di uscita pluggable, audit in `ai_agent_runs`). ✓
+- [x] **A1-writer — Writer agentico** (`generateDraft` thin-wrapper; tool reali via accessor iniettati; autenticità come gate di uscita). ✓
+- [x] **A2 — Writer feedback loop** (tool `getFeedbackSignal` condizionale; adatta la bozza ai segnali analytics). ✓
+
+**Superficie**
+- [x] **T1 — Staging + coda proposte** (`agent_proposals` RLS; `AgentProposalStore`; `POST /agent-proposals/generate`; UI coda con costo + ragionamento). ✓
+- [x] **T2 — Settings agentici** (budget/BYOK/autonomia/`auditPolicy`; chiave sealed mai esposta). ✓
+
+**Specialisti & orchestrazione**
+- [x] **S1 — SEO Agent** (proposta non-bloccante `seo_suggestions`: title/meta/slug/keyword/link-interni/readability; tool deterministici; colonna `content_items.seo_proposal`). ✓ **gate ALL_GREEN**
+- [ ] **S2 — Social Agent** (repurposing per canale come agente).
+- [ ] **S3 — Email Agent**.
+- [ ] **X1 — Researcher** (ricerca/contesto; eventuale SERP-port reale = nuovo ADR).
+- [ ] **O1 — Analyst** (lettura analytics → insight proposti).
+- [ ] **O2 — Inbound** (triage richieste in ingresso; "ogni richiesta all'umano").
+- [ ] **O0 — pg-boss** (infra job per orchestrazione/autonomia = nuovo ADR).
+- [ ] **O3 — Orchestratore** (piano editoriale + **motore di autonomia dietro flag** = nuovo ADR; dip.: A1-writer, S1-S3, O1, T1, O0).
+
+> **Stato: 9/16 slice sigillate** (gate ALL_GREEN). DEBT correlati: 016-028 (TECH_DEBT). Ricorrenti: BYOK non cablato nella DI live (DEBT-023/025), controller travel non ancora migrato all'agente (DEBT-025), retention run/usage (DEBT-021), SERP reale (DEBT-027). Le slice rimaste **esternalizzano per-slice** (tick ROADMAP + ADR per decisioni nuove).
