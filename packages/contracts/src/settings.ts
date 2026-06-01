@@ -53,10 +53,29 @@ export const channelSettingSchema = z.object({
 });
 export type ChannelSetting = z.infer<typeof channelSettingSchema>;
 
+/**
+ * Per-tenant monthly AI spend cap, in USD. This is the **hard cap** the R1-B
+ * circuit-breaker enforces: spend is the running `SUM(cost_usd)` over
+ * `ai_usage_events` for the current month, and a (sub-)run is refused once the
+ * cap is reached (L2) or its worst-case estimate would exceed the remaining
+ * headroom (L1) — see `platform/ai/budget-guard.ts`.
+ *
+ * AGGREGATION DECISION (agentic-plan §"Controlli di costo"): budget is enforced
+ * at TWO levels. A future per-agent **rate-limit of runs** caps how often any one
+ * specialist may fire; the per-tenant **hard cap** here is the invariant that
+ * actually bounds total cost — an Orchestrator firing N sub-agents can never
+ * spend N × the tenant cap, because the cap is re-read from the DB before every
+ * sub-run. The per-agent knob shapes cadence; THIS number bounds the bill.
+ * `.default()` so legacy settings rows (written before this field existed) still
+ * parse — they inherit the default cap.
+ */
+export const DEFAULT_BUDGET_USD_MONTHLY = 50;
+
 export const tenantSettingsSchema = z.object({
   brandVoice: brandVoiceSchema,
   specialistAutonomy: specialistAutonomySchema,
   channels: z.array(channelSettingSchema),
+  budgetUsdMonthly: z.number().nonnegative().default(DEFAULT_BUDGET_USD_MONTHLY),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
@@ -70,6 +89,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
     email: "manual",
   },
   channels: CHANNELS.map((channel) => ({ channel, enabled: false })),
+  budgetUsdMonthly: DEFAULT_BUDGET_USD_MONTHLY,
 };
 
 /**
@@ -86,5 +106,6 @@ export function withSettingsDefaults(partial?: unknown): TenantSettings {
       ...(p.specialistAutonomy ?? {}),
     },
     channels: p.channels ?? DEFAULT_TENANT_SETTINGS.channels,
+    budgetUsdMonthly: p.budgetUsdMonthly ?? DEFAULT_TENANT_SETTINGS.budgetUsdMonthly,
   };
 }

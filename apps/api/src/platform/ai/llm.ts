@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { MODEL_IDS, type ModelTier } from "./model-registry";
+import type { MeteringService } from "./metering";
+import type { BudgetGuard } from "./budget-guard";
 import type {
   CacheableBlock,
   Message,
@@ -222,11 +224,70 @@ function hasToolResult(messages: Message[]): boolean {
   return messages.some((m) => m.role === "tool_result");
 }
 
-/** Real Anthropic port when an API key is present, else the zero-cost stub. */
-export function createLlmPortFromEnv(): LlmPort {
-  return process.env.ANTHROPIC_API_KEY
+// ───────────────────────────────────────────────────────────────────────────
+// Metering decorator (Slice R1-B) — wraps ANY LlmPort so every round-trip is
+// budget-checked then metered, transparently to callers.
+// ───────────────────────────────────────────────────────────────────────────
+
+/**
+ * Decorator over an `LlmPort` that enforces the cost controls around every call:
+ *
+ *   1. `BudgetGuard.check` BEFORE delegating — if it throws, the inner
+ *      `complete` is NEVER called (no spend on a refused run).
+ *   2. `MeteringService.record` AFTER delegating, SYNCHRONOUSLY — the usage row
+ *      is on the DB before the next step/sub-agent reads the running total.
+ *
+ * A single round-trip's worst case is `{maxSteps: 1, maxTokens}` — the most this
+ * one call can emit — so the L1 estimate matches what's actually about to run.
+ * Wrapping is invisible to callers: `generateDraft` and the future AgentRunner
+ * see an ordinary `LlmPort`.
+ */
+export class MeteredLlmAdapter implements LlmPort {
+  constructor(
+    private readonly inner: LlmPort,
+    private readonly deps: { metering: MeteringService; budget: BudgetGuard },
+  ) {}
+
+  async complete(req: LlmRequest): Promise<LlmResponse> {
+    // Pre-call circuit-breaker. Throws -> inner.complete never runs.
+    await this.deps.budget.check(req.tenantId, {
+      model: req.model,
+      maxSteps: 1,
+      maxTokens: req.maxTokens,
+    });
+
+    const response = await this.inner.complete(req);
+
+    // Synchronous metering: the spend is durable before we hand control back.
+    await this.deps.metering.record({
+      tenantId: req.tenantId,
+      runId: req.runId,
+      agentName: req.agentId,
+      model: req.model,
+      usage: response.usage,
+    });
+
+    return response;
+  }
+}
+
+/**
+ * Real Anthropic port when an API key is present, else the zero-cost stub. When
+ * metering deps are supplied the port is composed as `metered(anthropic|stub)`
+ * (Slice R1-B); with no deps it returns the bare port (no DB to meter against —
+ * e.g. the arch test / unit contexts).
+ * TODO(debt): DEBT-019 — production callers don't compose the metered port yet;
+ * the AgentRunner (A1-core) wires `metered(provider(tenant))` with budget from
+ * `getTenantSettings`.
+ */
+export function createLlmPortFromEnv(deps?: {
+  metering: MeteringService;
+  budget: BudgetGuard;
+}): LlmPort {
+  const base = process.env.ANTHROPIC_API_KEY
     ? new AnthropicLlmAdapter()
     : new StubLlmAdapter();
+  return deps ? new MeteredLlmAdapter(base, deps) : base;
 }
 
 // ───────────────────────────────────────────────────────────────────────────

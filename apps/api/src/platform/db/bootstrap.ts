@@ -50,6 +50,7 @@ const APP_RW_TABLES = [
   "bookings",
   "leads",
   "metric_snapshots",
+  "ai_usage_events",
 ];
 
 /**

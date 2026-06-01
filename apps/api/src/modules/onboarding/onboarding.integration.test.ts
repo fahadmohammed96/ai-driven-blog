@@ -31,6 +31,7 @@ import {
   bookings,
   leads,
   metricSnapshots,
+  aiUsageEvents,
 } from "../../platform/db/schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ const TENANT_TABLES = [
   "bookings",
   "leads",
   "metric_snapshots",
+  "ai_usage_events",
 ] as const;
 
 let container: StartedPostgreSqlContainer;
@@ -167,6 +169,14 @@ async function seedSurface(tenant: string): Promise<void> {
       channel: "blog",
       metric: "clicks",
       value: 1,
+    });
+    await tx.insert(aiUsageEvents).values({
+      tenantId: tenant,
+      agentName: "writer",
+      model: "balanced",
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: "0.001050",
     });
   });
 }

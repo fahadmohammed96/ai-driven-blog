@@ -7,6 +7,7 @@ import {
   jsonb,
   integer,
   doublePrecision,
+  numeric,
   date,
   unique,
 } from "drizzle-orm/pg-core";
@@ -371,6 +372,33 @@ export const metricSnapshots = pgTable(
       .nullsNotDistinct(),
   ],
 );
+
+/**
+ * AI metering (Slice R1-B): one row per LLM round-trip — the audit trail behind
+ * the per-tenant budget circuit-breaker. `MeteringService.record` writes it
+ * synchronously (the spend is on the DB before the next step/sub-agent), and
+ * `monthlySpendUsd` re-reads `SUM(cost_usd)` for the current month to feed
+ * `BudgetGuard`. `cost_usd` is derived app-side from `pricePerToken(tier)` and
+ * the usage (DEBT-016: prices hardcoded). `run_id` is nullable and joins toward
+ * `ai_agent_runs` once that table lands (A1-core) — no FK yet, the table doesn't
+ * exist. Tenant-scoped by RLS.
+ */
+export const aiUsageEvents = pgTable("ai_usage_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  // Nullable FK toward ai_agent_runs (A1-core); left unconstrained until that
+  // table exists, so a single-shot (non-run) call can record with run_id NULL.
+  // TODO(debt): DEBT-019 — add the FK once ai_agent_runs lands (A1-core).
+  runId: uuid("run_id"),
+  agentName: text("agent_name").notNull(),
+  model: text("model").notNull(),
+  inputTokens: integer("input_tokens").notNull(),
+  outputTokens: integer("output_tokens").notNull(),
+  costUsd: numeric("cost_usd", { precision: 12, scale: 6 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
