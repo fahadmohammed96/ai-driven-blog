@@ -90,6 +90,26 @@ describe("unified analytics — ingest + dashboard as the runtime app role (RLS)
     expect(dash.ingestedAt).not.toBeNull();
   });
 
+  it("is idempotent: repeated AND concurrent ingests yield ONE row per (source,channel,metric,period)", async () => {
+    // A already has one affiliate blog click seeded above. Re-ingest twice
+    // sequentially, then twice concurrently (the shape the shared-tenant e2e
+    // races): the unique key + upsert guarantee no duplicate rows accrue.
+    await service.ingestAll(TENANT_A);
+    await service.ingestAll(TENANT_A);
+    await Promise.all([service.ingestAll(TENANT_A), service.ingestAll(TENANT_A)]);
+
+    const dash = await service.getDashboard(TENANT_A);
+    const affBlog = dash.rows.filter(
+      (r) => r.source === "affiliate" && r.channel === "blog" && r.metric === "clicks",
+    );
+    expect(affBlog).toHaveLength(1);
+    expect(affBlog[0]!.value).toBe(1);
+
+    // No (source, channel, metric, period) key appears more than once, anywhere.
+    const keys = dash.rows.map((r) => `${r.source}|${r.channel ?? "∅"}|${r.metric}|${r.period}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
   it("isolates metrics per tenant (RLS): B ingests/reads only its own, A's survive", async () => {
     // B has no internal signal of its own → affiliate rows are empty, but the
     // external stubs still populate (deterministic fixtures).

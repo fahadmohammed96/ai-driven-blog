@@ -46,3 +46,13 @@ policy `tenant_isolation` su entrambe aggiunte a mano** in coda.
 Tabella `connector_credentials` (token OAuth **cifrati** a riposo: `access_token`/
 `refresh_token` sealed, `expires_at`; unique `(tenant_id,connector)`). Generato da
 drizzle-kit; **RLS + policy `tenant_isolation` aggiunta a mano** in coda.
+
+## `0012_*.sql` — metric_snapshots: chiave unica per idempotenza (fix 4.3)
+Vincolo `UNIQUE NULLS NOT DISTINCT (tenant_id, source, channel, metric, period)` su
+`metric_snapshots`. L'ingest è "replace-per-source" (delete→insert) + ora **upsert**
+su questa chiave: rende un duplicato fisicamente impossibile, così anche ingest
+**concorrenti/sovrapposti** restano idempotenti (la race che il gate E2E condiviso
+ha esposto). Generato da drizzle-kit; **rifinito a mano** con una DELETE di
+de-duplica *prima* dell'ADD CONSTRAINT (un DB che ha già accumulato duplicati non
+fallirebbe la migrazione). `NULLS NOT DISTINCT` perché un `channel` null non deve
+poter aggirare il vincolo.

@@ -345,19 +345,32 @@ export const leads = pgTable(
  * **external** sources stubbed at the boundary (GA4, Search Console). Ingestion
  * replaces a source's rows on each run (idempotent snapshot). Tenant-scoped by RLS.
  */
-export const metricSnapshots = pgTable("metric_snapshots", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id")
-    .notNull()
-    .references(() => tenants.id),
-  source: text("source").notNull(),
-  channel: text("channel"),
-  metric: text("metric").notNull(),
-  value: doublePrecision("value").notNull(),
-  period: text("period").notNull().default("all"),
-  contentItemId: uuid("content_item_id").references(() => contentItems.id),
-  capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const metricSnapshots = pgTable(
+  "metric_snapshots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    source: text("source").notNull(),
+    channel: text("channel"),
+    metric: text("metric").notNull(),
+    value: doublePrecision("value").notNull(),
+    period: text("period").notNull().default("all"),
+    contentItemId: uuid("content_item_id").references(() => contentItems.id),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Ingest is "replace-per-source" (delete-then-insert). This unique key makes a
+  // duplicate (source, channel, metric, period) for a tenant physically
+  // impossible, so even overlapping/concurrent ingests stay idempotent — the
+  // service upserts on it. NULLS NOT DISTINCT so a null channel can't slip a
+  // second row past the constraint.
+  (t) => [
+    unique("metric_snapshots_tenant_source_channel_metric_period_unique")
+      .on(t.tenantId, t.source, t.channel, t.metric, t.period)
+      .nullsNotDistinct(),
+  ],
+);
 
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
