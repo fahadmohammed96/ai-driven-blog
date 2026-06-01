@@ -1,13 +1,18 @@
 import { desc, eq, sql } from "drizzle-orm";
-import type { Block, Proposal, SeoProposal } from "@blogs/contracts";
+import type { Block, ChannelPostMap, Proposal, SeoProposal } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
 import { agentProposals, aiAgentRuns } from "../../platform/db/schema";
 import type { ToolCall } from "../../platform/ai/tools";
+// Cross-module via the public barrel only (arch boundary): the social channel
+// posts repo is the gate sink for `social_captions` proposals.
+import { insertChannelPosts } from "../social";
 import {
   annotateSeoProposal,
+  getContentItem,
   insertContentItem,
   transitionContentItem,
+  ContentNotFoundError,
   type ContentItemRow,
 } from "./content.repo";
 
@@ -140,7 +145,9 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
       const result =
         row.type === "seo_suggestions"
           ? await approveSeoSuggestions(tx, row)
-          : await approveContentDraft(tx, tenantId, row);
+          : row.type === "social_captions"
+            ? await approveSocialCaptions(tx, tenantId, row)
+            : await approveContentDraft(tx, tenantId, row);
       await tx
         .update(agentProposals)
         .set({ status: "approved", reviewedAt: sql`now()` })
@@ -193,6 +200,26 @@ async function approveSeoSuggestions(
 ): Promise<ContentItemRow> {
   const seo = row.payload as SeoProposal;
   return annotateSeoProposal(tx, seo.contentItemId, seo);
+}
+
+/**
+ * `social_captions` gate (Social Agent, Slice S2): insert the proposed posts as
+ * `channel_posts` at status `draft` — the EXISTING Phase-2.5 per-post approval
+ * gate (`setPostApproval`) stays the final gate before anything goes out. This
+ * does NOT publish and does NOT touch the publication state machine; it returns
+ * the source content item (status unchanged) so the gate response shape matches
+ * the other types. The subject id rides in the payload (`ChannelPostMap.contentItemId`).
+ */
+async function approveSocialCaptions(
+  tx: Tx,
+  tenantId: string,
+  row: typeof agentProposals.$inferSelect,
+): Promise<ContentItemRow> {
+  const map = row.payload as ChannelPostMap;
+  await insertChannelPosts(tx, tenantId, map.contentItemId, map.posts);
+  const item = await getContentItem(tx, map.contentItemId);
+  if (!item) throw new ContentNotFoundError(map.contentItemId);
+  return item;
 }
 
 /** Read a proposal that must exist and still be pending (idempotent gate). */
