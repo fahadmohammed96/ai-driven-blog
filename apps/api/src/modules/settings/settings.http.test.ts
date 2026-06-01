@@ -15,9 +15,14 @@ import { type TenantSettings } from "@blogs/contracts";
 import { DB } from "../../platform/tokens";
 import { createDb, type Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
+import { DbCredentialStore } from "../../platform/integration";
+import { LLM_ANTHROPIC_CONNECTOR } from "../../platform/ai/provider-registry";
 import { TenancyService } from "../tenancy";
 import { SettingsController } from "./settings.controller";
+import { SETTINGS_CREDENTIAL_STORE } from "./settings.tokens";
 import { getTenantSettings, upsertTenantSettings } from "./settings.repo";
+
+const MASTER = "settings-http-master-secret";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(here, "../../../drizzle");
@@ -39,7 +44,9 @@ beforeAll(async () => {
   for (const f of files) await adminPool.query(readFileSync(join(migrationsDir, f), "utf8"));
   await adminPool.query(`CREATE ROLE appuser LOGIN PASSWORD 'app_pw' NOSUPERUSER`);
   await adminPool.query(`GRANT USAGE ON SCHEMA public TO appuser`);
-  await adminPool.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, tenant_settings TO appuser`);
+  await adminPool.query(
+    `GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, tenant_settings, connector_credentials TO appuser`,
+  );
   await adminPool.query(
     `INSERT INTO tenants (id, slug, name) VALUES ($1,'founder','Founder'), ($2,'other','Other')`,
     [TENANT, OTHER],
@@ -52,7 +59,11 @@ beforeAll(async () => {
   process.env.FOUNDER_TENANT_ID = TENANT;
   const moduleRef = await Test.createTestingModule({
     controllers: [SettingsController],
-    providers: [TenancyService, { provide: DB, useValue: db }],
+    providers: [
+      TenancyService,
+      { provide: DB, useValue: db },
+      { provide: SETTINGS_CREDENTIAL_STORE, useValue: new DbCredentialStore(db, MASTER) },
+    ],
   }).compile();
   app = moduleRef.createNestApplication();
   await app.init();
@@ -80,6 +91,7 @@ const FOUNDER_SETTINGS: TenantSettings = {
   ],
   budgetUsdMonthly: 50,
   aiProvider: { connector: "stub" },
+  auditPolicy: "obbligatorio",
 };
 
 describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
@@ -151,6 +163,7 @@ describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
       ],
       budgetUsdMonthly: 50,
       aiProvider: { connector: "stub" },
+      auditPolicy: "best-effort",
     };
     // Seed OTHER's settings directly under OTHER's tenant context.
     await withTenant(db, OTHER, (tx) => upsertTenantSettings(tx, OTHER, foreign));
@@ -166,5 +179,58 @@ describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
       .expect(200);
     const otherAfter = await withTenant(db, OTHER, (tx) => getTenantSettings(tx));
     expect(otherAfter).toEqual(foreign);
+  });
+
+  it("persists the audit policy via PUT", async () => {
+    await request(app.getHttpServer())
+      .put("/settings")
+      .send({ ...FOUNDER_SETTINGS, auditPolicy: "best-effort" })
+      .expect(200);
+    const get = await request(app.getHttpServer()).get("/settings").expect(200);
+    expect((get.body as TenantSettings).auditPolicy).toBe("best-effort");
+  });
+
+  it("BYOK: a saved apiKey is sealed (never plaintext) and flips aiProvider to anthropic", async () => {
+    const put = await request(app.getHttpServer())
+      .put("/settings")
+      .send({ ...FOUNDER_SETTINGS, apiKey: "sk-founder-byok-probe" })
+      .expect(200);
+    const body = put.body as TenantSettings & { apiKey?: unknown };
+
+    // The key never round-trips: aiProvider mirrors "configured", the secret is gone.
+    expect(body.aiProvider).toEqual({ connector: "anthropic" });
+    expect(body.apiKey).toBeUndefined();
+    expect(JSON.stringify(body)).not.toContain("sk-founder-byok-probe");
+
+    // GET reflects "configurata" (anthropic) and still never exposes the key.
+    const get = await request(app.getHttpServer()).get("/settings").expect(200);
+    expect((get.body as TenantSettings).aiProvider).toEqual({ connector: "anthropic" });
+    expect(JSON.stringify(get.body)).not.toContain("sk-founder-byok-probe");
+
+    // The credential is stored ENCRYPTED in connector_credentials (AES-256-GCM).
+    const { rows } = await adminPool.query<{ access_token: string }>(
+      `SELECT access_token FROM connector_credentials WHERE tenant_id = $1 AND connector = $2`,
+      [TENANT, LLM_ANTHROPIC_CONNECTOR],
+    );
+    expect(rows[0]!.access_token).not.toContain("sk-founder-byok-probe");
+
+    // It decrypts back to the original key with the same master secret (so
+    // ProviderRegistry can build the per-tenant port).
+    const store = new DbCredentialStore(db, MASTER);
+    const token = await store.load(TENANT, LLM_ANTHROPIC_CONNECTOR);
+    expect(token?.accessToken).toBe("sk-founder-byok-probe");
+  });
+
+  it("a PUT without apiKey leaves the stored key untouched", async () => {
+    // Save a key, then PUT plain settings (no apiKey) — the credential survives.
+    await request(app.getHttpServer())
+      .put("/settings")
+      .send({ ...FOUNDER_SETTINGS, apiKey: "sk-keep-me" })
+      .expect(200);
+    await request(app.getHttpServer()).put("/settings").send(FOUNDER_SETTINGS).expect(200);
+
+    const store = new DbCredentialStore(db, MASTER);
+    const token = await store.load(TENANT, LLM_ANTHROPIC_CONNECTOR);
+    expect(token?.accessToken).toBe("sk-keep-me");
   });
 });

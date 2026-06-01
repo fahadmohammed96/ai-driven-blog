@@ -148,7 +148,15 @@ export class AgentProposalsController {
     ]);
     // Budget headroom shown at the gate (critica #13): cap − spent this month.
     const tenantBudgetResiduoUsd = round6(settings.budgetUsdMonthly - spent);
-    return { tenantBudgetResiduoUsd, proposals: rows.map(toView) };
+    // Audit policy enforcement (Slice T2): under `obbligatorio` a proposal whose
+    // run was NOT audited (`auditRecorded=false`, the best-effort write degraded)
+    // is withheld from the queue — no audit, no review (ADR-0020 accountability).
+    // `best-effort` shows it anyway. Default is strict.
+    const visible =
+      settings.auditPolicy === "obbligatorio"
+        ? rows.filter((r) => r.auditRecorded)
+        : rows;
+    return { tenantBudgetResiduoUsd, proposals: visible.map(toView) };
   }
 
   @Post(":id/approve")

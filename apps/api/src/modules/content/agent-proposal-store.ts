@@ -51,6 +51,13 @@ export interface StagedProposal {
   reviewedAt: Date | null;
   /** The producing run's ReAct tool trace (the agent's "reasoning"), if audited. */
   toolCalls: ToolCall[];
+  /**
+   * Whether the producing run was audited: true iff an `ai_agent_runs` row exists
+   * for `runId`. The runner writes that row BEST-EFFORT, so a proposal can land
+   * with `auditRecorded=false` (audit write degraded). The gate uses this with
+   * `TenantSettings.auditPolicy` to decide whether to surface the proposal.
+   */
+  auditRecorded: boolean;
 }
 
 /** The Writer's `content_draft` payload, plus an optional caller-supplied title. */
@@ -105,12 +112,18 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
         .select({
           p: agentProposals,
           toolCalls: aiAgentRuns.toolCallsJson,
+          // Non-null only when the best-effort audit row exists → auditRecorded.
+          // TODO(debt): DEBT-026 — derived at query-time from the LEFT JOIN, not a
+          // persisted column; interacts with ai_agent_runs retention (DEBT-021).
+          runRowId: aiAgentRuns.id,
         })
         .from(agentProposals)
         .leftJoin(aiAgentRuns, eq(aiAgentRuns.id, agentProposals.runId))
         .where(eq(agentProposals.status, "pending"))
         .orderBy(desc(agentProposals.createdAt));
-      return rows.map((r) => toStaged(r.p, r.toolCalls as ToolCall[] | null));
+      return rows.map((r) =>
+        toStaged(r.p, r.toolCalls as ToolCall[] | null, r.runRowId !== null),
+      );
     });
   }
 
@@ -166,6 +179,7 @@ async function selectPending(
 function toStaged(
   row: typeof agentProposals.$inferSelect,
   toolCalls: ToolCall[] | null,
+  auditRecorded: boolean,
 ): StagedProposal {
   return {
     id: row.id,
@@ -183,6 +197,7 @@ function toStaged(
     createdAt: row.createdAt,
     reviewedAt: row.reviewedAt,
     toolCalls: toolCalls ?? [],
+    auditRecorded,
   };
 }
 

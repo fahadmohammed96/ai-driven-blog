@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   AUTONOMY_LEVELS,
+  AUDIT_POLICIES,
   SPECIALISTS,
   DEFAULT_TENANT_SETTINGS,
   tenantSettingsSchema,
@@ -44,6 +45,25 @@ describe("tenant settings contracts", () => {
     });
     expect(parsed.aiProvider).toEqual({ connector: "stub" });
     expect(withSettingsDefaults({}).aiProvider).toEqual({ connector: "stub" });
+  });
+
+  it("defaults auditPolicy to obbligatorio (strict audit gate)", () => {
+    expect(AUDIT_POLICIES).toEqual(["obbligatorio", "best-effort"]);
+    expect(DEFAULT_TENANT_SETTINGS.auditPolicy).toBe("obbligatorio");
+    // Legacy rows with no auditPolicy still parse and inherit the strict default.
+    const parsed = tenantSettingsSchema.parse({
+      brandVoice: { tone: "", audience: "" },
+      specialistAutonomy: DEFAULT_TENANT_SETTINGS.specialistAutonomy,
+      channels: DEFAULT_TENANT_SETTINGS.channels,
+    });
+    expect(parsed.auditPolicy).toBe("obbligatorio");
+    expect(withSettingsDefaults({}).auditPolicy).toBe("obbligatorio");
+    expect(withSettingsDefaults({ auditPolicy: "best-effort" }).auditPolicy).toBe("best-effort");
+  });
+
+  it("rejects an unknown auditPolicy", () => {
+    const bad = { ...DEFAULT_TENANT_SETTINGS, auditPolicy: "lax" };
+    expect(tenantSettingsSchema.safeParse(bad).success).toBe(false);
   });
 
   it("rejects an unknown aiProvider connector", () => {

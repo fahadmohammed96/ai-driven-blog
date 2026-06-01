@@ -89,12 +89,29 @@ export const DEFAULT_AI_PROVIDER: AiProviderSetting = { connector: "stub" };
  */
 export const DEFAULT_BUDGET_USD_MONTHLY = 50;
 
+/**
+ * How strict the agentic audit gate is (agentic-plan §"Audit"). Every agent run
+ * writes its `ai_agent_runs` row BEST-EFFORT; a proposal can therefore ship with
+ * `auditRecorded: false` (the write degraded). This knob decides what the human
+ * gate does with such a proposal:
+ *  - `obbligatorio` (default, ADR-0020 accountability): a proposal whose run was
+ *    NOT audited is withheld from the review queue — no audit, no review.
+ *  - `best-effort`: such a proposal is still shown (degraded, but visible).
+ * `.default()` so legacy settings rows (written before this field) still parse —
+ * they inherit the strict default.
+ */
+export const auditPolicySchema = z.enum(["obbligatorio", "best-effort"]);
+export type AuditPolicy = z.infer<typeof auditPolicySchema>;
+export const AUDIT_POLICIES = auditPolicySchema.options;
+export const DEFAULT_AUDIT_POLICY: AuditPolicy = "obbligatorio";
+
 export const tenantSettingsSchema = z.object({
   brandVoice: brandVoiceSchema,
   specialistAutonomy: specialistAutonomySchema,
   channels: z.array(channelSettingSchema),
   budgetUsdMonthly: z.number().nonnegative().default(DEFAULT_BUDGET_USD_MONTHLY),
   aiProvider: aiProviderSchema.default(DEFAULT_AI_PROVIDER),
+  auditPolicy: auditPolicySchema.default(DEFAULT_AUDIT_POLICY),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
@@ -110,6 +127,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   channels: CHANNELS.map((channel) => ({ channel, enabled: false })),
   budgetUsdMonthly: DEFAULT_BUDGET_USD_MONTHLY,
   aiProvider: DEFAULT_AI_PROVIDER,
+  auditPolicy: DEFAULT_AUDIT_POLICY,
 };
 
 /**
@@ -128,5 +146,6 @@ export function withSettingsDefaults(partial?: unknown): TenantSettings {
     channels: p.channels ?? DEFAULT_TENANT_SETTINGS.channels,
     budgetUsdMonthly: p.budgetUsdMonthly ?? DEFAULT_TENANT_SETTINGS.budgetUsdMonthly,
     aiProvider: p.aiProvider ?? DEFAULT_TENANT_SETTINGS.aiProvider,
+    auditPolicy: p.auditPolicy ?? DEFAULT_TENANT_SETTINGS.auditPolicy,
   };
 }

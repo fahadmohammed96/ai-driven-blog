@@ -16,6 +16,9 @@ const apiEnv: Record<string, string> = {
   S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? "minio",
   S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? "minio12345",
   S3_BUCKET: process.env.S3_BUCKET ?? "media",
+  // Seals per-tenant BYOK keys in connector_credentials (Slice T2). Any non-empty
+  // value works for e2e; production provisions a real secret (DEBT-008/023).
+  CONNECTOR_SECRET_KEY: process.env.CONNECTOR_SECRET_KEY ?? "e2e-connector-secret-key",
 };
 
 export default defineConfig({

@@ -11,12 +11,14 @@ import {
   type StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql";
 import { Pool } from "pg";
+import { withSettingsDefaults } from "@blogs/contracts";
 import { DB, LLM } from "../../platform/tokens";
 import { createDb, type Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
 import { ensureAppRole } from "../../platform/db/bootstrap";
-import { aiUsageEvents } from "../../platform/db/schema";
+import { aiUsageEvents, agentProposals } from "../../platform/db/schema";
 import { TenancyService } from "../tenancy";
+import { upsertTenantSettings } from "../settings";
 import { AgentProposalsController } from "./agent-proposals.controller";
 
 // HTTP test for the agentic "Code proposte" surface (Slice T1): the Writer's
@@ -133,5 +135,46 @@ describe("agent-proposals HTTP (Slice T1)", () => {
 
   it("approving an already-approved proposal is a 409 (idempotent gate)", async () => {
     await request(app.getHttpServer()).post(`/agent-proposals/${proposalId}/approve`).expect(409);
+  });
+
+  // Slice T2: the audit policy gates an UN-audited proposal (no ai_agent_runs row
+  // for its run_id → auditRecorded=false). Stage one directly and toggle policy.
+  const unauditedId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+
+  async function setAuditPolicy(policy: "obbligatorio" | "best-effort") {
+    await withTenant(db, TENANT, (tx) =>
+      upsertTenantSettings(tx, TENANT, withSettingsDefaults({ auditPolicy: policy })),
+    );
+  }
+
+  async function listIds(): Promise<string[]> {
+    const res = await request(app.getHttpServer()).get("/agent-proposals").expect(200);
+    return (res.body.proposals as Array<{ id: string }>).map((p) => p.id);
+  }
+
+  it("withholds an un-audited proposal under auditPolicy=obbligatorio (default)", async () => {
+    // run_id points at no ai_agent_runs row → auditRecorded=false.
+    await withTenant(db, TENANT, (tx) =>
+      tx.insert(agentProposals).values({
+        id: unauditedId,
+        tenantId: TENANT,
+        agentName: "writer",
+        runId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        type: "content_draft",
+        payload: { draft: "Bozza senza audit." },
+        rationale: "seeded",
+        estimatedCostUsd: "0.000000",
+        tokensUsed: { input: 0, output: 0, cached: 0 },
+        agentDefinitionVersion: "v1-test",
+      }),
+    );
+
+    await setAuditPolicy("obbligatorio");
+    expect(await listIds()).not.toContain(unauditedId);
+  });
+
+  it("surfaces the same un-audited proposal under auditPolicy=best-effort", async () => {
+    await setAuditPolicy("best-effort");
+    expect(await listIds()).toContain(unauditedId);
   });
 });
