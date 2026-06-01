@@ -35,8 +35,9 @@ import { createProjectToSocialTool, projectChannels } from "./tools/project-to-s
  *       (caption ↔ brand-voice keyword overlap). If it clears the threshold the
  *       agent emits the proposal WITHOUT EVER TOUCHING `LlmPort` — "no LLM when
  *       the projector is good enough" is a GUARANTEE, not a prompt hint.
- *   (B) LLM — only when the score is below threshold: ONE LLM step PER CHANNEL
- *       rewrites the caption/hashtags within the channel's hard limits, then the
+ *   (B) LLM — only when the score is below threshold: TYPICALLY one LLM step per
+ *       channel (maxSteps:2 leaves headroom for a tool round-trip — not a hard
+ *       guarantee) rewrites the caption/hashtags within the channel's limits, then the
  *       results are merged. `fast` (Haiku) for x/instagram, `balanced` (Sonnet)
  *       for pinterest.
  *
@@ -284,10 +285,15 @@ function buildChannelBrief(post: ChannelPost, brandVoice: BrandVoiceView): strin
   });
 }
 
-/** Deterministic idempotency key for the path-A audit row (mirrors the runner). */
-function deriveTaskId(contentItemId: string, triggeredAt: Date): string {
+/**
+ * Deterministic idempotency key for the path-A audit row (mirrors the runner).
+ * The channel SET is part of task identity — like Path B's `:channel` — so a
+ * same-day re-suggest with a DIFFERENT channel selection is NOT a replay.
+ */
+function deriveTaskId(contentItemId: string, channels: Channel[], triggeredAt: Date): string {
   const day = triggeredAt.toISOString().slice(0, 10);
-  return createHash("sha256").update(`social|${contentItemId}|${day}`).digest("hex").slice(0, 32);
+  const chans = [...channels].sort().join(",");
+  return createHash("sha256").update(`social|${contentItemId}|${chans}|${day}`).digest("hex").slice(0, 32);
 }
 
 const SOCIAL_VERSION = hashAgentDefinition({
@@ -354,7 +360,7 @@ export class SocialAgent {
     projected: ChannelPost[],
   ): Promise<Proposal<ChannelPostMap>> {
     const triggeredAt = ctx.triggeredAt ?? new Date();
-    const taskId = ctx.taskId ?? deriveTaskId(input.contentItemId, triggeredAt);
+    const taskId = ctx.taskId ?? deriveTaskId(input.contentItemId, projected.map((p) => p.channel), triggeredAt);
 
     // Idempotency: a prior deterministic run for this task → replay it, no work.
     const existing = await this.runnerDeps.store.findByTaskId(ctx.tenantId, taskId);
@@ -502,7 +508,9 @@ export class SocialAgent {
     },
   ): Proposal<ChannelPostMap> {
     return {
-      id: randomUUID(),
+      // Reuse the (stable) runId as the proposal id so a same-day replay re-stages
+      // the SAME id → persist's onConflictDoNothing(id) dedupes (mirrors AgentRunner.replay).
+      id: runId,
       tenantId,
       agentId: "social",
       runId,

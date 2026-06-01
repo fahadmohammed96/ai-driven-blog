@@ -12,6 +12,7 @@ import {
 import { projectChannels } from "./tools/project-to-social";
 import type { ArticleContent } from "../repurpose";
 import { StubLlmAdapter, type LlmPort, type LlmRequest } from "../../../platform/ai/llm";
+import type { AgentRunStore, RunEnvelope } from "../../../platform/ai/agent-run-store";
 
 // Social Agent on the generic AgentRunner (Slice S2). Stub/spy LLM everywhere →
 // zero cost. The biforcation is STRUCTURAL: path A never touches the port.
@@ -59,6 +60,23 @@ function spyLlm(content = "{}"): { port: LlmPort; calls: LlmRequest[] } {
     },
   };
   return { port, calls };
+}
+
+/** Minimal in-memory AgentRunStore so the path-A replay branch is exercised. */
+function memStore(): { store: AgentRunStore } {
+  const rows = new Map<string, { id: string; createdAt: Date; envelope: RunEnvelope }>();
+  return {
+    store: {
+      findByTaskId: async (tenantId, taskId) => rows.get(`${tenantId}:${taskId}`) ?? null,
+      record: async (rec) => {
+        rows.set(`${rec.tenantId}:${rec.taskId}`, {
+          id: rec.id,
+          createdAt: new Date("2026-06-01T10:00:00.000Z"),
+          envelope: rec.envelope,
+        });
+      },
+    },
+  };
 }
 
 describe("brandVoiceScore (deterministic, pure)", () => {
@@ -182,5 +200,38 @@ describe("SocialAgent.run", () => {
         { tenantId: TENANT },
       ),
     ).rejects.toBeInstanceOf(NoProducibleChannelsError);
+  });
+
+  it("PATH A: same-day re-suggest with DIFFERENT channels does NOT replay the first call's channels", async () => {
+    const { store } = memStore();
+    const triggeredAt = new Date("2026-06-01T10:00:00.000Z");
+    const mk = () => new SocialAgent({ llm: spyLlm().port, accessors: fakeAccessors(EMPTY_VOICE), store });
+    const p1 = await mk().run(
+      { contentItemId: ITEM, article: ARTICLE, channels: ["instagram"] },
+      { tenantId: TENANT, triggeredAt },
+    );
+    expect(p1.payload.posts.map((p) => p.channel)).toEqual(["instagram"]);
+    const p2 = await mk().run(
+      { contentItemId: ITEM, article: ARTICLE, channels: ALL_CHANNELS },
+      { tenantId: TENANT, triggeredAt },
+    );
+    // The channel set is part of task identity → NOT a replay of the 1-channel payload.
+    expect(p2.payload.posts.map((p) => p.channel).sort()).toEqual(["instagram", "pinterest", "x"]);
+  });
+
+  it("PATH A: same-day re-suggest with the SAME channels replays with a STABLE proposal id (staging dedup)", async () => {
+    const { store } = memStore();
+    const triggeredAt = new Date("2026-06-01T10:00:00.000Z");
+    const mk = () => new SocialAgent({ llm: spyLlm().port, accessors: fakeAccessors(EMPTY_VOICE), store });
+    const p1 = await mk().run(
+      { contentItemId: ITEM, article: ARTICLE, channels: ["instagram"] },
+      { tenantId: TENANT, triggeredAt },
+    );
+    const p2 = await mk().run(
+      { contentItemId: ITEM, article: ARTICLE, channels: ["instagram"] },
+      { tenantId: TENANT, triggeredAt },
+    );
+    // Stable id across replays → persist's onConflictDoNothing(id) dedupes the staged proposal.
+    expect(p2.id).toBe(p1.id);
   });
 });
