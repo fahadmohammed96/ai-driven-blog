@@ -28,6 +28,8 @@ export {
   PostgresAgentProposalStore,
   ProposalNotFoundError,
   ProposalNotPendingError,
+  EmailSinkNotConfiguredError,
   type AgentProposalStore,
   type StagedProposal,
+  type EmailDraftSink,
 } from "./agent-proposal-store";

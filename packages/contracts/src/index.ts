@@ -25,3 +25,4 @@ export * from "./feedback";
 export * from "./onboarding";
 export * from "./proposal";
 export * from "./seo";
+export * from "./email";

@@ -1,5 +1,5 @@
 import { desc, eq, sql } from "drizzle-orm";
-import type { Block, ChannelPostMap, Proposal, SeoProposal } from "@blogs/contracts";
+import type { Block, ChannelPostMap, EmailDraft, Proposal, SeoProposal } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
 import { agentProposals, aiAgentRuns } from "../../platform/db/schema";
@@ -41,6 +41,26 @@ export class ProposalNotPendingError extends Error {
     super(`agent proposal ${id} is '${status}', not pending`);
     this.name = "ProposalNotPendingError";
   }
+}
+
+export class EmailSinkNotConfiguredError extends Error {
+  constructor() {
+    super("approving an 'email_draft' requires an EmailDraftSink (wired by the email module)");
+    this.name = "EmailSinkNotConfiguredError";
+  }
+}
+
+/**
+ * The gate sink for `email_draft` proposals (Slice S3): on approval the draft is
+ * sent to its theme's confirmed-opt-in segment. The IMPLEMENTATION lives in
+ * `modules/email` (it reuses `sendNewsletterToSegment` + the `EmailPort`); it is
+ * INJECTED here so `modules/content` does NOT import `modules/email` — avoiding
+ * the barrel cycle the S2 review flagged for social (DEBT-031c). The interface is
+ * owned by the store (the seam); the email module supplies the function.
+ */
+export interface EmailDraftSink {
+  /** Send the approved draft to the theme's segment; returns who it went to. */
+  send(tenantId: string, draft: EmailDraft): Promise<{ recipients: string[] }>;
 }
 
 /** A staged proposal row enriched with its run's reasoning (tool-call trace). */
@@ -85,7 +105,14 @@ export interface AgentProposalStore {
 }
 
 export class PostgresAgentProposalStore implements AgentProposalStore {
-  constructor(private readonly db: Db) {}
+  private readonly emailSink?: EmailDraftSink;
+
+  constructor(
+    private readonly db: Db,
+    opts: { emailSink?: EmailDraftSink } = {},
+  ) {
+    this.emailSink = opts.emailSink;
+  }
 
   async persist(proposal: Proposal): Promise<void> {
     await withTenant(this.db, proposal.tenantId, (tx) =>
@@ -147,7 +174,9 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
           ? await approveSeoSuggestions(tx, row)
           : row.type === "social_captions"
             ? await approveSocialCaptions(tx, tenantId, row)
-            : await approveContentDraft(tx, tenantId, row);
+            : row.type === "email_draft"
+              ? await approveEmailDraft(tx, tenantId, row, this.emailSink)
+              : await approveContentDraft(tx, tenantId, row);
       await tx
         .update(agentProposals)
         .set({ status: "approved", reviewedAt: sql`now()` })
@@ -219,6 +248,31 @@ async function approveSocialCaptions(
   await insertChannelPosts(tx, tenantId, map.contentItemId, map.posts);
   const item = await getContentItem(tx, map.contentItemId);
   if (!item) throw new ContentNotFoundError(map.contentItemId);
+  return item;
+}
+
+/**
+ * `email_draft` gate (Email Agent, Slice S3): the approval IS the send gate. The
+ * approved draft is sent to its theme's confirmed-opt-in segment via the INJECTED
+ * `EmailDraftSink` (reuses `sendNewsletterToSegment` in `modules/email`); nothing
+ * was sent before this human approval (the propose-only invariant). IDEMPOTENT:
+ * the outer `approve` only reaches this for a still-`pending` row (`selectPending`
+ * throws otherwise) and marks it `approved` AFTER the send returns — so
+ * re-approving an already-approved draft never sends a second time. The subject
+ * article (status unchanged) is returned so the gate response shape matches the
+ * other types; the theme + contentItemId ride in the payload (`EmailDraft`).
+ */
+async function approveEmailDraft(
+  tx: Tx,
+  tenantId: string,
+  row: typeof agentProposals.$inferSelect,
+  sink: EmailDraftSink | undefined,
+): Promise<ContentItemRow> {
+  if (!sink) throw new EmailSinkNotConfiguredError();
+  const draft = row.payload as EmailDraft;
+  await sink.send(tenantId, draft);
+  const item = await getContentItem(tx, draft.contentItemId);
+  if (!item) throw new ContentNotFoundError(draft.contentItemId);
   return item;
 }
 

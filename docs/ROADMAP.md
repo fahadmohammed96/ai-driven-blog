@@ -92,7 +92,7 @@ Legenda: `[ ]` da fare · `[~]` in corso · `[x]` fatto.
 **Specialisti & orchestrazione**
 - [x] **S1 — SEO Agent** (proposta non-bloccante `seo_suggestions`: title/meta/slug/keyword/link-interni/readability; tool deterministici; colonna `content_items.seo_proposal`). ✓ **gate ALL_GREEN**
 - [x] **S2 — Social Agent** (proposta `social_captions`: proiettori deterministici + layer LLM caption/hashtag opzionale con biforcazione NEL CODICE su `brandVoiceScore`; gate Fase 2.5 `channel_posts→draft` su approvazione). ✓ **suite veloci ALL_GREEN**
-- [ ] **S3 — Email Agent**.
+- [x] **S3 — Email Agent** (proposta `email_draft`: proiettore newsletter deterministico + layer LLM opzionale per subject/preheader con biforcazione NEL CODICE su `brandVoiceScore`; gate Fase 2.5 = `approve` invia al segmento del tema via `sendNewsletterToSegment`, idempotente; sink email iniettato per evitare il ciclo barrel content↔email). ✓ **suite veloci ALL_GREEN**
 - [ ] **X1 — Researcher** (ricerca/contesto; eventuale SERP-port reale = nuovo ADR).
 - [ ] **O1 — Analyst** (lettura analytics → insight proposti).
 - [ ] **O2 — Inbound** (triage richieste in ingresso; "ogni richiesta all'umano").
