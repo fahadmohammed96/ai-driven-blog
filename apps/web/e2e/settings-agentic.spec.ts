@@ -122,6 +122,8 @@ test.describe("settings drive the agentic surface", () => {
     const option = page.locator(
       '[data-testid="settings-autonomy-writer"] option[value="auto-within-limits"]',
     );
-    await expect(option).toBeDisabled();
+    // Playwright's toBeDisabled() does not detect disabled <option> elements
+    // reliably; assert the attribute directly (the DOM renders <option disabled>).
+    await expect(option).toHaveAttribute("disabled", "");
   });
 });
