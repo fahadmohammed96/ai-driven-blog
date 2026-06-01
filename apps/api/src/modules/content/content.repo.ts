@@ -1,5 +1,5 @@
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
-import type { Block, PublicationStatus } from "@blogs/contracts";
+import type { Block, PublicationStatus, SeoProposal } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
 import { contentItems } from "../../platform/db/schema";
@@ -83,6 +83,28 @@ export async function updateContentItem(
     .update(contentItems)
     .set({ ...patch, updatedAt: sql`now()` })
     .where(eq(contentItems.id, id));
+}
+
+/**
+ * Annotate a content item with an approved {@link SeoProposal} (Slice S1). This
+ * is NON-BLOCKING: it writes the `seo_proposal` JSONB field and bumps
+ * `updated_at`, but does NOT touch the publication `status` — the SEO enriches
+ * the item, it never gates it. RLS scopes the write to the current tenant; a
+ * missing/foreign item throws {@link ContentNotFoundError}.
+ */
+export async function annotateSeoProposal(
+  tx: Tx,
+  id: string,
+  seoProposal: SeoProposal,
+): Promise<ContentItemRow> {
+  const item = await getContentItem(tx, id);
+  if (!item) throw new ContentNotFoundError(id);
+  const [row] = await tx
+    .update(contentItems)
+    .set({ seoProposal, updatedAt: sql`now()` })
+    .where(eq(contentItems.id, id))
+    .returning();
+  return row as ContentItemRow;
 }
 
 /**

@@ -7,6 +7,7 @@ export {
   listContentItems,
   type ContentListFilters,
   updateContentItem,
+  annotateSeoProposal,
   transitionContentItem,
   applyTransition,
   decideContentItem,
@@ -23,3 +24,10 @@ export {
   InvalidTransitionError,
   type PublicationEvent,
 } from "./state-machine";
+export {
+  PostgresAgentProposalStore,
+  ProposalNotFoundError,
+  ProposalNotPendingError,
+  type AgentProposalStore,
+  type StagedProposal,
+} from "./agent-proposal-store";

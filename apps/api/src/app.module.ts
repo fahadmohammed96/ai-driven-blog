@@ -6,6 +6,7 @@ import { TenancyModule } from "./modules/tenancy";
 import { ContentModule } from "./modules/content";
 import { AuthModule } from "./modules/auth";
 import { SocialModule } from "./modules/social";
+import { SeoModule } from "./modules/seo";
 import { EmailModule } from "./modules/email";
 import { SettingsModule } from "./modules/settings";
 import { MonetizationModule } from "./modules/monetization";
@@ -23,6 +24,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     ContentModule,
     AuthModule,
     SocialModule,
+    SeoModule,
     EmailModule,
     SettingsModule,
     MonetizationModule,

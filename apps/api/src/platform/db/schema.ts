@@ -11,7 +11,7 @@ import {
   date,
   unique,
 } from "drizzle-orm/pg-core";
-import type { Block, ChannelPost, TenantSettings } from "@blogs/contracts";
+import type { Block, ChannelPost, SeoProposal, TenantSettings } from "@blogs/contracts";
 
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -39,6 +39,13 @@ export const contentItems = pgTable("content_items", {
     .defaultNow(),
   // Set once, when the item first reaches 'published' (idempotent publish).
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  // SEO Agent annotation (Slice S1): the approved `SeoProposal` (title, meta,
+  // slug, primary keyword, internal links, readability) — NON-BLOCKING, it
+  // enriches the item, it does NOT add a publication state. Nullable: an item
+  // has no SEO annotation until a `seo_suggestions` proposal is approved. Covered
+  // by the table's existing tenant RLS policy (no extra grant — table-level
+  // GRANT on content_items already covers new columns).
+  seoProposal: jsonb("seo_proposal").$type<SeoProposal>(),
 });
 
 /** Travel vertical: the structured stops of an itinerary content item. */

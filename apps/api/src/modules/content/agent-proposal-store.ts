@@ -1,10 +1,15 @@
 import { desc, eq, sql } from "drizzle-orm";
-import type { Block, Proposal } from "@blogs/contracts";
+import type { Block, Proposal, SeoProposal } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
 import { agentProposals, aiAgentRuns } from "../../platform/db/schema";
 import type { ToolCall } from "../../platform/ai/tools";
-import { insertContentItem, transitionContentItem, type ContentItemRow } from "./content.repo";
+import {
+  annotateSeoProposal,
+  insertContentItem,
+  transitionContentItem,
+  type ContentItemRow,
+} from "./content.repo";
 
 /**
  * `agent_proposals` staging store (Slice T1) — the human gate's consumer side of
@@ -130,22 +135,17 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
   async approve(tenantId: string, id: string): Promise<ContentItemRow> {
     return withTenant(this.db, tenantId, async (tx) => {
       const row = await selectPending(tx, id);
-      const payload = row.payload as ContentDraftPayload;
-      // Inject the proposal into the EXISTING Phase-1 state machine: a new draft
-      // content item, then draft → review (the gate is the consumer, critica #6).
-      const created = await insertContentItem(tx, {
-        tenantId,
-        type: "article",
-        title: deriveTitle(payload),
-        blocks: draftToBlocks(payload),
-      });
-      const reviewed = await transitionContentItem(tx, created.id, "propose");
-      const inReview = await transitionContentItem(tx, reviewed.id, "startReview");
+      // Route by proposal type to the right human-gate sink (agent→gate map). The
+      // gate is always a CONSUMER of the staging table, never bypassed.
+      const result =
+        row.type === "seo_suggestions"
+          ? await approveSeoSuggestions(tx, row)
+          : await approveContentDraft(tx, tenantId, row);
       await tx
         .update(agentProposals)
         .set({ status: "approved", reviewedAt: sql`now()` })
         .where(eq(agentProposals.id, id));
-      return inReview;
+      return result;
     });
   }
 
@@ -158,6 +158,41 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
         .where(eq(agentProposals.id, id));
     });
   }
+}
+
+/**
+ * `content_draft` gate (Writer): inject the payload into the EXISTING Phase-1
+ * publication state machine — a new draft content item, then draft → review (the
+ * gate is the consumer, critica #6).
+ */
+async function approveContentDraft(
+  tx: Tx,
+  tenantId: string,
+  row: typeof agentProposals.$inferSelect,
+): Promise<ContentItemRow> {
+  const payload = row.payload as ContentDraftPayload;
+  const created = await insertContentItem(tx, {
+    tenantId,
+    type: "article",
+    title: deriveTitle(payload),
+    blocks: draftToBlocks(payload),
+  });
+  const reviewed = await transitionContentItem(tx, created.id, "propose");
+  return transitionContentItem(tx, reviewed.id, "startReview");
+}
+
+/**
+ * `seo_suggestions` gate (SEO Agent, Slice S1): NON-BLOCKING — annotate the
+ * target content item's `seo_proposal` field. It does NOT mint a new item nor
+ * touch the publication state; the SEO enriches the existing item. The target id
+ * rides in the payload (`SeoProposal.contentItemId`).
+ */
+async function approveSeoSuggestions(
+  tx: Tx,
+  row: typeof agentProposals.$inferSelect,
+): Promise<ContentItemRow> {
+  const seo = row.payload as SeoProposal;
+  return annotateSeoProposal(tx, seo.contentItemId, seo);
 }
 
 /** Read a proposal that must exist and still be pending (idempotent gate). */
