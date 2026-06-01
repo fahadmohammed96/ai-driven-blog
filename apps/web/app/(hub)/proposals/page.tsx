@@ -21,9 +21,27 @@ interface ProposalItem {
   title: string;
 }
 
+/** A staged AI-agent proposal (Slice T1): cost + reasoning + definition version. */
+interface AgentProposal {
+  id: string;
+  agentName: string;
+  type: string;
+  status: string;
+  estimatedCostUsd: number;
+  agentDefinitionVersion: string;
+  rationale: string;
+  title: string;
+  draftPreview: string;
+  reasoning: { name: string; input: unknown }[];
+}
+
 /** Edit a proposal = open it in the slice-2 Block Editor (same URL contract). */
 function editorHref(id: string): string {
   return `/editor?id=${id}`;
+}
+
+function usd(n: number): string {
+  return `$${n.toFixed(2)}`;
 }
 
 export default function ProposalsSurface() {
@@ -31,6 +49,23 @@ export default function ProposalsSurface() {
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+
+  // Slice T1 — staged AI-agent proposals + the tenant's residual monthly budget.
+  const [agentItems, setAgentItems] = useState<AgentProposal[]>([]);
+  const [budgetResiduo, setBudgetResiduo] = useState<number | null>(null);
+  const [agentBusy, setAgentBusy] = useState<string | null>(null);
+
+  const loadAgents = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/agent-proposals`);
+      if (!res.ok) throw new Error("load failed");
+      const body = await res.json();
+      setAgentItems(body.proposals as AgentProposal[]);
+      setBudgetResiduo(body.tenantBudgetResiduoUsd as number);
+    } catch {
+      setError("Caricamento proposte agenti fallito");
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -54,7 +89,27 @@ export default function ProposalsSurface() {
 
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadAgents();
+  }, [load, loadAgents]);
+
+  const decideAgent = useCallback(
+    async (id: string, action: "approve" | "reject") => {
+      setAgentBusy(id);
+      setError(null);
+      try {
+        const res = await fetch(`${API}/agent-proposals/${id}/${action}`, { method: "POST" });
+        if (!res.ok) throw new Error("decision failed");
+        // Approve consumes the proposal into the Phase-1 state machine (draft →
+        // review): reload BOTH queues so the new item shows in the publish queue.
+        await Promise.all([loadAgents(), load()]);
+      } catch {
+        setError("Azione agente fallita");
+      } finally {
+        setAgentBusy(null);
+      }
+    },
+    [loadAgents, load],
+  );
 
   const decide = useCallback(
     async (id: string, action: "approve" | "reject") => {
@@ -88,6 +143,97 @@ export default function ProposalsSurface() {
           {error}
         </p>
       )}
+
+      {/* Slice T1 — staged AI-agent proposals: cost + residual budget + the
+          agent's reasoning, approved into the same publish state machine. */}
+      <section data-testid="surface-agent-proposals" style={{ marginBottom: space.lg }}>
+        <h2 style={{ fontSize: font.size.lg, color: color.text, margin: `0 0 ${space.sm}` }}>
+          Proposte degli agenti
+        </h2>
+        {budgetResiduo !== null && (
+          <p
+            data-testid="agent-budget-residuo"
+            style={{ margin: `0 0 ${space.md}`, color: color.textMuted, fontSize: font.size.sm }}
+          >
+            Budget residuo del mese: <strong>{usd(budgetResiduo)}</strong>
+          </p>
+        )}
+
+        {agentItems.length === 0 ? (
+          <Card testId="agent-proposals-empty">
+            <p style={{ margin: 0, color: color.textMuted }}>
+              Nessuna proposta degli agenti in attesa.
+            </p>
+          </Card>
+        ) : (
+          <ul
+            data-testid="agent-proposals-list"
+            style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: space.md }}
+          >
+            {agentItems.map((p) => (
+              <li key={p.id} data-testid="agent-proposal-item" data-id={p.id} data-status={p.status}>
+                <Card style={{ display: "grid", gap: space.sm }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: space.sm, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 600, color: color.text }}>{p.title}</span>
+                    <span style={{ color: color.textMuted, fontSize: font.size.sm }}>
+                      {p.agentName} · {p.type}
+                    </span>
+                    <span
+                      data-testid="agent-proposal-version"
+                      style={{ color: color.textMuted, fontSize: font.size.sm }}
+                    >
+                      v: {p.agentDefinitionVersion}
+                    </span>
+                  </span>
+
+                  <span style={{ display: "flex", alignItems: "center", gap: space.md, flexWrap: "wrap" }}>
+                    <span data-testid="agent-proposal-cost" style={{ fontSize: font.size.sm, color: color.text }}>
+                      Costo stimato: <strong>{usd(p.estimatedCostUsd)}</strong>
+                    </span>
+                  </span>
+
+                  <details data-testid="agent-proposal-reasoning">
+                    <summary style={{ cursor: "pointer", fontSize: font.size.sm, color: color.textMuted }}>
+                      Ragionamento agente
+                    </summary>
+                    <p style={{ margin: `${space.xs} 0 0`, color: color.textMuted, fontSize: font.size.sm }}>
+                      {p.rationale}
+                    </p>
+                    {p.reasoning.length > 0 && (
+                      <ul style={{ margin: `${space.xs} 0 0`, paddingLeft: "1.25rem" }}>
+                        {p.reasoning.map((r, i) => (
+                          <li key={i} style={{ color: color.textMuted, fontSize: font.size.sm }}>
+                            {r.name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </details>
+
+                  <span style={{ display: "flex", alignItems: "center", gap: space.sm }}>
+                    <button
+                      data-testid="agent-proposal-approve"
+                      onClick={() => decideAgent(p.id, "approve")}
+                      disabled={agentBusy === p.id}
+                      style={primaryButton(agentBusy === p.id)}
+                    >
+                      Approva
+                    </button>
+                    <button
+                      data-testid="agent-proposal-reject"
+                      onClick={() => decideAgent(p.id, "reject")}
+                      disabled={agentBusy === p.id}
+                      style={dangerButton(agentBusy === p.id)}
+                    >
+                      Rifiuta
+                    </button>
+                  </span>
+                </Card>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       {loaded && items.length === 0 && !error && (
         <Card testId="proposals-empty">

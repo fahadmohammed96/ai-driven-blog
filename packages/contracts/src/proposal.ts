@@ -59,5 +59,12 @@ export interface Proposal<T = unknown> {
   auditRecorded: boolean;
   /** Stable hash of the AgentDefinition snapshot that produced this proposal. */
   agentDefinitionVersion: string;
+  /**
+   * The Researcher's transparency brief, surfaced in the Writer's card when the
+   * external-sources flag is on (agentic-plan §6, critica #14). Ephemeral on the
+   * run; persisted to `agent_proposals.research_context` when present. Absent for
+   * every agent that does no external research.
+   */
+  researchContext?: unknown;
   createdAt: Date;
 }

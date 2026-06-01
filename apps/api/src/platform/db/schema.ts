@@ -434,6 +434,40 @@ export const aiAgentRuns = pgTable(
   (t) => [unique("ai_agent_runs_tenant_task_unique").on(t.tenantId, t.taskId)],
 );
 
+/**
+ * Agent proposal staging (Slice T1) — the staging queue of EVERY agent's
+ * `Proposal<T>` (the Writer first). The architectural invariant of ADR-0020 made
+ * structural: an agent run never touches published state, it lands a row here
+ * (`status='pending'`) and a human gate consumes it. On approve, the payload is
+ * injected into the existing Phase-1 publication state machine (a new
+ * `content_items` draft → review) and the row is marked `approved`; reject just
+ * marks it `rejected`. `run_id` joins toward `ai_agent_runs` (the ReAct
+ * tool-trace = the agent's "reasoning" surfaced in the UI); it is NOT a DB FK —
+ * the run audit is best-effort (a proposal can ship with `auditRecorded=false`),
+ * so a constraint would couple the gate to the audit write (continues DEBT-021).
+ * `agent_definition_version` snapshots the producing config (critica #12);
+ * `research_context` carries the Researcher's transparency brief when present
+ * (critica #14). Tenant-scoped by RLS. See DEBT-025 for what is still deferred.
+ */
+export const agentProposals = pgTable("agent_proposals", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id")
+    .notNull()
+    .references(() => tenants.id),
+  agentName: text("agent_name").notNull(),
+  runId: uuid("run_id").notNull(),
+  type: text("type").notNull(),
+  payload: jsonb("payload").notNull(),
+  rationale: text("rationale").notNull(),
+  estimatedCostUsd: numeric("estimated_cost_usd", { precision: 12, scale: 6 }).notNull(),
+  tokensUsed: jsonb("tokens_used").notNull(),
+  status: text("status").notNull().default("pending"),
+  agentDefinitionVersion: text("agent_definition_version").notNull(),
+  researchContext: jsonb("research_context"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+});
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")

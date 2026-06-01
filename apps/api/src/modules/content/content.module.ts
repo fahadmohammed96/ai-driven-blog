@@ -3,10 +3,11 @@ import { Module } from "@nestjs/common";
 import { TenancyModule } from "../tenancy";
 import { ContentService } from "./content.service";
 import { ArticlesController } from "./articles.controller";
+import { AgentProposalsController } from "./agent-proposals.controller";
 
 @Module({
   imports: [TenancyModule],
-  controllers: [ArticlesController],
+  controllers: [ArticlesController, AgentProposalsController],
   providers: [ContentService],
   exports: [ContentService],
 })
