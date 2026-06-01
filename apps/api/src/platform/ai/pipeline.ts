@@ -1,5 +1,5 @@
 import type { Embedder } from "./embedder";
-import type { LlmClient } from "./llm";
+import type { LlmPort } from "./llm";
 
 export interface BrandVoice {
   tone: string;
@@ -32,7 +32,7 @@ export function buildPrompt(brief: string, context: string[], feedbackHint?: str
 
 export interface GenerateDraftDeps {
   embedder: Embedder;
-  llm: LlmClient;
+  llm: LlmPort;
   retrieve: (tenantId: string, queryEmbedding: number[], k: number) => Promise<string[]>;
 }
 
@@ -69,6 +69,18 @@ export async function generateDraft(
   const usedContext = await deps.retrieve(input.tenantId, queryEmbedding, input.k ?? 3);
   const system = renderSystemPrompt(input.voice);
   const prompt = buildPrompt(input.brief, usedContext, input.feedbackHint);
-  const draft = await deps.llm.complete({ system, prompt });
-  return { draft, usedContext, system };
+  // Single-shot generation via the generalized port — same external behaviour as
+  // before (no tools, one round-trip, `balanced` tier == the previous Sonnet).
+  // tenantId/agentId/runId are carried for the metering+audit that R1-B/A1 add;
+  // the Writer becomes a real AgentRunner client in slice A1-writer.
+  const response = await deps.llm.complete({
+    tenantId: input.tenantId,
+    agentId: "writer",
+    runId: "generate-draft",
+    model: "balanced",
+    system: [{ type: "text", text: system }],
+    messages: [{ role: "user", content: prompt }],
+    maxTokens: 1500,
+  });
+  return { draft: response.content, usedContext, system };
 }
