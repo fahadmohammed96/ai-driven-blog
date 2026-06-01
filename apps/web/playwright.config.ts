@@ -24,10 +24,11 @@ const apiEnv: Record<string, string> = {
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
-  // Cap workers: the e2e specs share one backend/tenant, so high parallelism under
-  // load makes saves slow → first attempt times out → the retry races on shared
-  // state (e.g. settings.spec.ts). Fewer workers keeps the gate deterministic.
-  workers: 4,
+  // The e2e specs share one backend/tenant (the founder settings row, etc.), so
+  // running specs concurrently races on shared mutable state (budget/settings get
+  // clobbered mid-test). Run serially for a deterministic gate — the suite is fast
+  // (~21 quick specs) so the wall-clock cost is small.
+  workers: 1,
   use: { baseURL: "http://localhost:3100" },
   webServer: [
     {
