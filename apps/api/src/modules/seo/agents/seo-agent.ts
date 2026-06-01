@@ -221,7 +221,12 @@ export class SeoAgent {
       .map((c) => ({ contentItemId: c.contentItemId, anchor: c.title }));
 
     const existing = await this.accessors.existingContent(ctx.tenantId);
-    const existingSlugs = new Set(existing.map((e) => e.slug));
+    // The accessor returns ALL the tenant's items — exclude the item being
+    // optimized so its own slug isn't treated as a collision (mirrors the
+    // internal-link self-filter above).
+    const existingSlugs = new Set(
+      existing.filter((e) => e.contentItemId !== input.contentItemId).map((e) => e.slug),
+    );
 
     const tools: ToolDefinition[] = [
       createSeoAnalyzeTool() as ToolDefinition,

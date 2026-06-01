@@ -132,6 +132,26 @@ describe("SeoAgent.run", () => {
     expect(payload.slug).toBe("sicilia-al-tramonto-2");
   });
 
+  it("does NOT collide with the item's OWN existing slug (self-exclusion)", async () => {
+    // existingContent returns ALL the tenant's items, including the one being
+    // optimized. Its own slug must NOT count as a collision — otherwise every first
+    // suggestion gets a spurious "-2" on the deterministic path. Mirrors the
+    // internal-link self-filter.
+    const agent = new SeoAgent({
+      llm: new StubLlmAdapter(), // prose stub → deterministic fallback uses the explicit title
+      accessors: fakeAccessors({
+        existingContent: async () => [
+          { contentItemId: ITEM, title: "Sicilia al tramonto", slug: "sicilia-al-tramonto" },
+        ],
+      }),
+    });
+    const { payload } = await agent.run(
+      { contentItemId: ITEM, draft: DRAFT, title: "Sicilia al tramonto" },
+      { tenantId: TENANT },
+    );
+    expect(payload.slug).toBe("sicilia-al-tramonto");
+  });
+
   it("includes internal links but never links the item to itself", async () => {
     const agent = new SeoAgent({ llm: new StubLlmAdapter(), accessors: fakeAccessors() });
     const { payload } = await agent.run(
