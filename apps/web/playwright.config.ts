@@ -21,6 +21,10 @@ const apiEnv: Record<string, string> = {
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
+  // Cap workers: the e2e specs share one backend/tenant, so high parallelism under
+  // load makes saves slow → first attempt times out → the retry races on shared
+  // state (e.g. settings.spec.ts). Fewer workers keeps the gate deterministic.
+  workers: 4,
   use: { baseURL: "http://localhost:3100" },
   webServer: [
     {
