@@ -23,3 +23,4 @@ export * from "./crm";
 export * from "./analytics";
 export * from "./feedback";
 export * from "./onboarding";
+export * from "./proposal";

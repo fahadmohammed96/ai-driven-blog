@@ -51,6 +51,7 @@ const APP_RW_TABLES = [
   "leads",
   "metric_snapshots",
   "ai_usage_events",
+  "ai_agent_runs",
 ];
 
 /**

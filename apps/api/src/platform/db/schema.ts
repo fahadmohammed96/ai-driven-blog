@@ -400,6 +400,40 @@ export const aiUsageEvents = pgTable("ai_usage_events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * AI agent audit (Slice A1-core) — one row per `AgentRunner` run: the audit
+ * trail behind every proposal and the anchor for idempotent replay. The runner
+ * writes it BEST-EFFORT after the loop (`auditRecorded=false` + a structured log
+ * if the write fails, but the proposal is still returned). `task_id` is the
+ * deterministic idempotency key — a second run with the same `task_id` returns
+ * the stored proposal WITHOUT calling the LLM again. `tool_calls_json` is the
+ * ReAct tool trace; `usage_json` is the run-result envelope (status + payload +
+ * rationale + cost + aggregate token usage + truncated), which lets the replay
+ * reconstruct the exact `Proposal` (the full `agent_proposals` staging table
+ * lands in T1). `agent_definition_version` snapshots the producing config
+ * (critica #12). Tenant-scoped by RLS. No TTL/archive yet — DEBT-021.
+ */
+export const aiAgentRuns = pgTable(
+  "ai_agent_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id),
+    agentName: text("agent_name").notNull(),
+    taskId: text("task_id").notNull(),
+    steps: integer("steps").notNull(),
+    toolCallsJson: jsonb("tool_calls_json").notNull().default([]),
+    usageJson: jsonb("usage_json").notNull(),
+    agentDefinitionVersion: text("agent_definition_version").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // Idempotency anchor: at most one run row per (tenant, task). The runner
+  // checks this key before spending on the LLM; the unique constraint makes a
+  // duplicate physically impossible even under a concurrent retry.
+  (t) => [unique("ai_agent_runs_tenant_task_unique").on(t.tenantId, t.taskId)],
+);
+
 export const contentEmbeddings = pgTable("content_embeddings", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id")
