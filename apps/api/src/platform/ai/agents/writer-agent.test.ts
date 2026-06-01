@@ -8,6 +8,11 @@ import {
 import { StubLlmAdapter, type LlmPort, type LlmRequest, type LlmResponse } from "../llm";
 import { ProviderRegistry, LLM_ANTHROPIC_CONNECTOR } from "../provider-registry";
 import { InMemoryCredentialStore } from "../../integration";
+import {
+  GET_FEEDBACK_SIGNAL_TOOL_ID,
+  type GetFeedbackSignalAccessor,
+} from "./tools/get-feedback-signal";
+import type { AnalyticsDashboard } from "@blogs/contracts";
 import type { BrandVoice } from "../prompt";
 
 // ── test doubles ────────────────────────────────────────────────────────────
@@ -194,5 +199,151 @@ describe("WriterAgent", () => {
   it("rejects construction without exactly one LLM source", () => {
     const { accessors } = fakeAccessors();
     expect(() => new WriterAgent({ accessors })).toThrow(/exactly one/);
+  });
+});
+
+// ── WriterAgent — feedback loop (Slice A2) ───────────────────────────────────
+
+const CONTENT_ITEM = "22222222-2222-2222-2222-222222222222";
+
+/**
+ * A dashboard where pinterest clearly out-engages instagram, so the derived
+ * signal/prompt-hint mentions "pinterest" (and deprioritises instagram).
+ */
+const FEEDBACK_DASHBOARD: AnalyticsDashboard = {
+  rows: [],
+  bySource: [],
+  byChannel: [
+    { channel: "pinterest", metrics: [{ source: "ga4", metric: "sessions", value: 500 }] },
+    { channel: "instagram", metrics: [{ source: "ga4", metric: "sessions", value: 40 }] },
+  ],
+  ingestedAt: null,
+};
+
+/** A fixture feedback accessor that records the content ids it was asked about. */
+function fakeFeedbackAccessor(dashboard: AnalyticsDashboard) {
+  const calls: string[] = [];
+  const accessor: GetFeedbackSignalAccessor = async (_tenantId, contentItemId) => {
+    calls.push(contentItemId);
+    return dashboard;
+  };
+  return { accessor, calls };
+}
+
+/**
+ * A model double that calls `getFeedbackSignal` when offered it, then weaves the
+ * returned hint into the draft — so the with-hint draft differs from the baseline.
+ */
+class FeedbackAwareLlm implements LlmPort {
+  calls = 0;
+  feedbackCalls = 0;
+  lastSignalResult: string | undefined;
+  async complete(req: LlmRequest): Promise<LlmResponse> {
+    this.calls++;
+    const usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+    const hasFeedbackTool =
+      req.tools?.some((t) => t.id === GET_FEEDBACK_SIGNAL_TOOL_ID) ?? false;
+    const feedbackResult = req.messages.find(
+      (m): m is Extract<typeof m, { role: "tool_result" }> =>
+        m.role === "tool_result" && m.toolName === GET_FEEDBACK_SIGNAL_TOOL_ID,
+    );
+    if (hasFeedbackTool && !feedbackResult) {
+      this.feedbackCalls++;
+      return {
+        content: "",
+        toolCalls: [
+          { id: "call-fb", name: GET_FEEDBACK_SIGNAL_TOOL_ID, input: { contentItemId: CONTENT_ITEM } },
+        ],
+        stopReason: "tool_use",
+        usage,
+      };
+    }
+    // end_turn — incorporate the signal (kept on one first-person paragraph so the
+    // authenticity gate still passes, i.e. no extra retry obscures the assertions).
+    if (feedbackResult) this.lastSignalResult = feedbackResult.content;
+    const hint = feedbackResult ? ` Adatto il taglio al segnale: ${feedbackResult.content}` : "";
+    return { content: PERSONAL_DRAFT + hint, stopReason: "end_turn", usage };
+  }
+}
+
+describe("WriterAgent — feedback loop (Slice A2)", () => {
+  it("stand-alone: the model calls getFeedbackSignal; the signal comes back and the draft adapts (≠ no-hint draft)", async () => {
+    const fbWith = fakeFeedbackAccessor(FEEDBACK_DASHBOARD);
+    const { accessors: accWith } = fakeAccessors({ getFeedbackSignal: fbWith.accessor });
+    const llmWith = new FeedbackAwareLlm();
+    const withHint = await new WriterAgent({ llm: llmWith, accessors: accWith }).run(
+      { brief: "Scrivi sul cibo in Giappone", voice: VOICE, contentItemId: CONTENT_ITEM },
+      { tenantId: TENANT },
+    );
+
+    const fbWithout = fakeFeedbackAccessor(FEEDBACK_DASHBOARD);
+    const { accessors: accWithout } = fakeAccessors({ getFeedbackSignal: fbWithout.accessor });
+    const llmWithout = new FeedbackAwareLlm();
+    const noHint = await new WriterAgent({ llm: llmWithout, accessors: accWithout }).run(
+      { brief: "Scrivi sul cibo in Giappone", voice: VOICE },
+      { tenantId: TENANT },
+    );
+
+    // The tool ran once and the derived signal (mentioning the top channel) came back.
+    expect(llmWith.feedbackCalls).toBe(1);
+    expect(fbWith.calls).toEqual([CONTENT_ITEM]);
+    expect(llmWith.lastSignalResult).toContain("pinterest");
+    // No contentItemId → the tool was never offered → never called.
+    expect(llmWithout.feedbackCalls).toBe(0);
+    expect(fbWithout.calls).toHaveLength(0);
+    // The hint observably changed the draft.
+    expect(withHint.payload.draft).not.toBe(noHint.payload.draft);
+    expect(withHint.payload.draft).toContain("pinterest");
+  });
+
+  it("a feedback signal already pre-injected in the brief → tool NOT offered, zero feedback calls", async () => {
+    const fb = fakeFeedbackAccessor(FEEDBACK_DASHBOARD);
+    const { accessors } = fakeAccessors({ getFeedbackSignal: fb.accessor });
+    const llm = new CapturingLlm(
+      new StubLlmAdapter({ scenario: "immediate-end-turn", content: PERSONAL_DRAFT }),
+    );
+    await new WriterAgent({ llm, accessors }).run(
+      {
+        brief: "Scrivi sul cibo in Giappone",
+        voice: VOICE,
+        contentItemId: CONTENT_ITEM,
+        feedbackHint: "Favorisci contenuti per il canale \"pinterest\".",
+      },
+      { tenantId: TENANT },
+    );
+
+    const toolIds = (llm.lastReq?.tools ?? []).map((t) => t.id);
+    expect(toolIds).not.toContain(GET_FEEDBACK_SIGNAL_TOOL_ID);
+    expect(fb.calls).toHaveLength(0);
+  });
+
+  it("no contentItemId → feedback tool NOT offered", async () => {
+    const fb = fakeFeedbackAccessor(FEEDBACK_DASHBOARD);
+    const { accessors } = fakeAccessors({ getFeedbackSignal: fb.accessor });
+    const llm = new CapturingLlm(
+      new StubLlmAdapter({ scenario: "immediate-end-turn", content: PERSONAL_DRAFT }),
+    );
+    await new WriterAgent({ llm, accessors }).run(
+      { brief: "Scrivi sul cibo in Giappone", voice: VOICE },
+      { tenantId: TENANT },
+    );
+
+    const toolIds = (llm.lastReq?.tools ?? []).map((t) => t.id);
+    expect(toolIds).not.toContain(GET_FEEDBACK_SIGNAL_TOOL_ID);
+    expect(fb.calls).toHaveLength(0);
+  });
+
+  it("integration: run with a valid contentItemId + fixture accessor completes without error", async () => {
+    const fb = fakeFeedbackAccessor(FEEDBACK_DASHBOARD);
+    const { accessors } = fakeAccessors({ getFeedbackSignal: fb.accessor });
+    const llm = new StubLlmAdapter({ scenario: "one-tool-then-end", content: PERSONAL_DRAFT });
+    const proposal = await new WriterAgent({ llm, accessors }).run(
+      { brief: "Scrivi sul cibo in Giappone", voice: VOICE, contentItemId: CONTENT_ITEM },
+      { tenantId: TENANT },
+    );
+
+    expect(proposal.payload.draft.length).toBeGreaterThan(0);
+    expect(proposal.type).toBe("content_draft");
+    expect(proposal.requiresHumanGate).toBe(true);
   });
 });

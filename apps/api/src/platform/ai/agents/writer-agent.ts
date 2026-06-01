@@ -34,6 +34,11 @@ import {
   createGetMediaForStopTool,
   type GetMediaForStopAccessor,
 } from "./tools/get-media-for-stop";
+import {
+  createGetFeedbackSignalTool,
+  GET_FEEDBACK_SIGNAL_TOOL_ID,
+  type GetFeedbackSignalAccessor,
+} from "./tools/get-feedback-signal";
 
 /**
  * WriterAgent — the FIRST real agent on `AgentRunner` (agentic-plan Slice
@@ -71,6 +76,12 @@ export interface WriterAccessors {
   getBrandVoice?: GetBrandVoiceAccessor;
   getItinerary?: GetItineraryAccessor;
   getMediaForStop?: GetMediaForStopAccessor;
+  /**
+   * Optional metric-feedback accessor (Slice A2). Only registered as the
+   * `getFeedbackSignal` tool, and only OFFERED on a run that carries a
+   * `contentItemId` and has no pre-injected hint (see {@link WriterAgent.run}).
+   */
+  getFeedbackSignal?: GetFeedbackSignalAccessor;
 }
 
 export interface WriterAgentDeps {
@@ -99,6 +110,14 @@ export interface WriterRunInput {
   k?: number;
   /** Metric-derived feedback-loop hint, woven into the prompt (ADR-0026). */
   feedbackHint?: string;
+  /**
+   * The content item this run refines (Slice A2). When present AND no
+   * `feedbackHint` is pre-injected, the Writer is offered the `getFeedbackSignal`
+   * tool so the model can pull the metric-derived self-improvement hint itself
+   * (the stand-alone case). With a pre-injected `feedbackHint` the tool is NOT
+   * offered — the signal is already in the prompt, so a fetch would be wasteful.
+   */
+  contentItemId?: string;
   /** Idempotency subject; defaults to the brief. */
   subjectId?: string;
 }
@@ -159,7 +178,10 @@ function articleDraftSchema(): SchemaLike<ArticleDraft> {
 
 export class WriterAgent {
   private readonly accessors: WriterAccessors;
-  private readonly allowedTools: string[];
+  /** Tools offered on EVERY run (A1-writer): the data-gathering palette. */
+  private readonly baseToolIds: string[];
+  /** The feedback tool id, present only when its accessor was supplied (A2). */
+  private readonly feedbackToolId: string | undefined;
   private readonly tools: ToolRegistry;
   /** Resolves the LlmPort for a run's tenant (per-tenant BYOK, or fixed legacy port). */
   private readonly resolveLlm: (tenantId: string) => Promise<LlmPort>;
@@ -174,9 +196,21 @@ export class WriterAgent {
       throw new Error("WriterAgent requires exactly one of { llm, provider }");
     }
     this.accessors = deps.accessors;
-    const tools = buildWriterTools(deps.accessors);
-    this.allowedTools = tools.map((t) => t.id);
-    this.tools = new ToolRegistry(tools);
+    const baseTools = buildWriterTools(deps.accessors);
+    this.baseToolIds = baseTools.map((t) => t.id);
+    const allTools = [...baseTools];
+    // The feedback tool is registered when its accessor is supplied, but it is
+    // OFFERED per-run (only with a contentItemId and no pre-injected hint) — so
+    // the bare `generateDraft` path is unchanged (it offers it never).
+    if (deps.accessors.getFeedbackSignal) {
+      allTools.push(
+        createGetFeedbackSignalTool(deps.accessors.getFeedbackSignal) as ToolDefinition,
+      );
+      this.feedbackToolId = GET_FEEDBACK_SIGNAL_TOOL_ID;
+    } else {
+      this.feedbackToolId = undefined;
+    }
+    this.tools = new ToolRegistry(allTools);
     this.resolveLlm = deps.provider
       ? (tenantId) => deps.provider!.getClient(tenantId)
       : async () => deps.llm!;
@@ -206,10 +240,22 @@ export class WriterAgent {
     const system = renderSystemPrompt(input.voice);
     const prompt = buildPrompt(input.brief, usedContext, input.feedbackHint);
 
+    // Offer `getFeedbackSignal` only stand-alone (A2): a contentItemId to refine,
+    // its accessor wired, and NO hint already in the prompt (pre-injection is free
+    // — re-fetching would just spend tokens). The model then decides whether to
+    // call it; with a pre-injected hint the tool is absent, so zero feedback calls.
+    // TODO(debt): DEBT-024 — no live caller injects the accessor / propagates a
+    // contentItemId yet, and the pre-injected hint awaits the Orchestrator.
+    const preInjected = input.feedbackHint !== undefined;
+    const allowedTools =
+      this.feedbackToolId !== undefined && input.contentItemId !== undefined && !preInjected
+        ? [...this.baseToolIds, this.feedbackToolId]
+        : this.baseToolIds;
+
     const def: AgentDefinition<ArticleDraft> = {
       ...WRITER_DEF_BASE,
       systemPrompt: system,
-      allowedTools: this.allowedTools,
+      allowedTools,
       outputSchema: articleDraftSchema(),
       // The LLM emits the article text; the structured payload closes over the
       // pre-retrieved context + rendered system (the runner only sees `content`).
