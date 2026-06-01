@@ -54,6 +54,24 @@ export const channelSettingSchema = z.object({
 export type ChannelSetting = z.infer<typeof channelSettingSchema>;
 
 /**
+ * Per-tenant AI provider selection (BYOK) — METADATA ONLY.
+ *
+ * The ACTUAL provider choice at runtime is driven by the *existence* of an
+ * encrypted `llm_anthropic` credential in `connector_credentials`
+ * (`platform/ai/provider-registry.ts`), NOT by reading this field — so the AI
+ * kernel never depends on `modules/settings`. This is the founder-facing view of
+ * that state: `connector: 'anthropic'` once a tenant key is provisioned, else
+ * `'stub'`/platform-key. `credentialId` is an optional human-friendly pointer.
+ * `.default()` so legacy settings rows (written before this field) still parse.
+ */
+export const aiProviderSchema = z.object({
+  connector: z.enum(["anthropic", "stub"]),
+  credentialId: z.string().optional(),
+});
+export type AiProviderSetting = z.infer<typeof aiProviderSchema>;
+export const DEFAULT_AI_PROVIDER: AiProviderSetting = { connector: "stub" };
+
+/**
  * Per-tenant monthly AI spend cap, in USD. This is the **hard cap** the R1-B
  * circuit-breaker enforces: spend is the running `SUM(cost_usd)` over
  * `ai_usage_events` for the current month, and a (sub-)run is refused once the
@@ -76,6 +94,7 @@ export const tenantSettingsSchema = z.object({
   specialistAutonomy: specialistAutonomySchema,
   channels: z.array(channelSettingSchema),
   budgetUsdMonthly: z.number().nonnegative().default(DEFAULT_BUDGET_USD_MONTHLY),
+  aiProvider: aiProviderSchema.default(DEFAULT_AI_PROVIDER),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
@@ -90,6 +109,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   },
   channels: CHANNELS.map((channel) => ({ channel, enabled: false })),
   budgetUsdMonthly: DEFAULT_BUDGET_USD_MONTHLY,
+  aiProvider: DEFAULT_AI_PROVIDER,
 };
 
 /**
@@ -107,5 +127,6 @@ export function withSettingsDefaults(partial?: unknown): TenantSettings {
     },
     channels: p.channels ?? DEFAULT_TENANT_SETTINGS.channels,
     budgetUsdMonthly: p.budgetUsdMonthly ?? DEFAULT_TENANT_SETTINGS.budgetUsdMonthly,
+    aiProvider: p.aiProvider ?? DEFAULT_TENANT_SETTINGS.aiProvider,
   };
 }

@@ -79,6 +79,7 @@ const FOUNDER_SETTINGS: TenantSettings = {
     { channel: "pinterest", enabled: true },
   ],
   budgetUsdMonthly: 50,
+  aiProvider: { connector: "stub" },
 };
 
 describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
@@ -149,6 +150,7 @@ describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
         { channel: "pinterest", enabled: false },
       ],
       budgetUsdMonthly: 50,
+      aiProvider: { connector: "stub" },
     };
     // Seed OTHER's settings directly under OTHER's tenant context.
     await withTenant(db, OTHER, (tx) => upsertTenantSettings(tx, OTHER, foreign));

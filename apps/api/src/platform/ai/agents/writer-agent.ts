@@ -8,6 +8,7 @@ import {
 import type { AgentDefinition } from "../agent-registry";
 import { ToolRegistry } from "../tool-registry";
 import type { LlmPort } from "../llm";
+import type { ProviderRegistry } from "../provider-registry";
 import type { SchemaLike, ToolDefinition } from "../tools";
 import type { BudgetGuard } from "../budget-guard";
 import type { AgentRunStore } from "../agent-run-store";
@@ -73,7 +74,17 @@ export interface WriterAccessors {
 }
 
 export interface WriterAgentDeps {
-  llm: LlmPort;
+  /**
+   * The Writer's LLM source. Exactly ONE of:
+   *  - `provider`: a {@link ProviderRegistry} — the preferred, BYOK-aware source
+   *    (R1-C). The port is resolved PER TENANT at `run()` time, so a tenant with
+   *    its own key uses it and everyone else falls back to the platform key.
+   *  - `llm`: a fixed {@link LlmPort}. The legacy seam still used by the
+   *    `generateDraft` compat wrapper (and unit tests). Behaviour is identical to
+   *    the provider path with no tenant credential — the registry's own fallback.
+   */
+  llm?: LlmPort;
+  provider?: ProviderRegistry;
   accessors: WriterAccessors;
   /** Defaults to a no-op store: `generateDraft`'s sink is unchanged (DEBT-022). */
   store?: AgentRunStore;
@@ -147,21 +158,33 @@ function articleDraftSchema(): SchemaLike<ArticleDraft> {
 }
 
 export class WriterAgent {
-  private readonly runner: AgentRunner;
   private readonly accessors: WriterAccessors;
   private readonly allowedTools: string[];
+  private readonly tools: ToolRegistry;
+  /** Resolves the LlmPort for a run's tenant (per-tenant BYOK, or fixed legacy port). */
+  private readonly resolveLlm: (tenantId: string) => Promise<LlmPort>;
+  private readonly runnerDeps: {
+    store: AgentRunStore;
+    budget: BudgetGuard;
+    logger?: RunLogger;
+  };
 
   constructor(deps: WriterAgentDeps) {
+    if (!deps.llm === !deps.provider) {
+      throw new Error("WriterAgent requires exactly one of { llm, provider }");
+    }
     this.accessors = deps.accessors;
     const tools = buildWriterTools(deps.accessors);
     this.allowedTools = tools.map((t) => t.id);
-    this.runner = new AgentRunner({
-      llm: deps.llm,
-      tools: new ToolRegistry(tools),
+    this.tools = new ToolRegistry(tools);
+    this.resolveLlm = deps.provider
+      ? (tenantId) => deps.provider!.getClient(tenantId)
+      : async () => deps.llm!;
+    this.runnerDeps = {
       store: deps.store ?? NOOP_RUN_STORE,
       budget: deps.budget ?? OK_BUDGET,
       ...(deps.logger ? { logger: deps.logger } : {}),
-    });
+    };
   }
 
   async run(
@@ -169,6 +192,11 @@ export class WriterAgent {
     ctx: { tenantId: string; taskId?: string; triggeredAt?: Date; runId?: string },
   ): Promise<Proposal<ArticleDraft>> {
     const k = input.k ?? DEFAULT_K;
+    // Resolve the LlmPort for THIS tenant (R1-C): the registry hands back the
+    // tenant's own key if present, else the platform key (the stub in CI/E2E).
+    // The runner is built per-run so each tenant gets the right port.
+    const llm = await this.resolveLlm(ctx.tenantId);
+    const runner = new AgentRunner({ llm, tools: this.tools, ...this.runnerDeps });
     // Pre-retrieve RAG context and seed it into the prompt, exactly as the
     // original `generateDraft` did — so even the deterministic stub (no tool
     // call) produces an IDENTICAL draft (backward compat). The `retrieveContext`
@@ -206,7 +234,7 @@ export class WriterAgent {
       ...(ctx.triggeredAt ? { triggeredAt: ctx.triggeredAt } : {}),
       ...(ctx.runId ? { runId: ctx.runId } : {}),
     };
-    return this.runner.run<ArticleDraft>(def, agentInput, runCtx);
+    return runner.run<ArticleDraft>(def, agentInput, runCtx);
   }
 }
 

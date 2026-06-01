@@ -34,6 +34,9 @@ function storageConfig() {
   providers: [
     { provide: DB, useFactory: () => createDb(databaseUrl()).db },
     { provide: STORAGE, useFactory: () => new S3Storage(storageConfig()) },
+    // TODO(debt): DEBT-023 — the live LLM token is still the platform key; the
+    // per-tenant `ProviderRegistry` (+ `DbCredentialStore`) is not wired here
+    // yet, so BYOK is inactive on the travel `generateDraft` path.
     { provide: LLM, useFactory: createLlmFromEnv },
     { provide: EMAIL, useFactory: createEmailFromEnv },
     { provide: PAYMENT, useFactory: createPaymentFromEnv },

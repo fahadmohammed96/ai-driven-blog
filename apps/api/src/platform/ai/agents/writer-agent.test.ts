@@ -6,6 +6,8 @@ import {
   AUTHENTICITY_THRESHOLD,
 } from "./tools/score-authenticity";
 import { StubLlmAdapter, type LlmPort, type LlmRequest, type LlmResponse } from "../llm";
+import { ProviderRegistry, LLM_ANTHROPIC_CONNECTOR } from "../provider-registry";
+import { InMemoryCredentialStore } from "../../integration";
 import type { BrandVoice } from "../prompt";
 
 // ── test doubles ────────────────────────────────────────────────────────────
@@ -151,5 +153,46 @@ describe("WriterAgent", () => {
 
     expect(llm.calls).toBe(1);
     expect(proposal.payload.draft).toBe(PERSONAL_DRAFT);
+  });
+
+  it("R1-C: sources its LlmPort from a ProviderRegistry, resolved per tenant", async () => {
+    const { accessors } = fakeAccessors();
+    const store = new InMemoryCredentialStore();
+    await store.save(TENANT, LLM_ANTHROPIC_CONNECTOR, {
+      accessToken: "sk-tenant-key",
+      refreshToken: "byok-no-refresh",
+      expiresAt: 0,
+    });
+    const seenKeys: string[] = [];
+    const tenantPort = new CapturingLlm(
+      new StubLlmAdapter({ scenario: "immediate-end-turn", content: PERSONAL_DRAFT }),
+    );
+    const provider = new ProviderRegistry({
+      store,
+      anthropicFactory: (apiKey) => {
+        seenKeys.push(apiKey);
+        return tenantPort;
+      },
+      platformFactory: () => {
+        throw new Error("platform key must not be used when a tenant key exists");
+      },
+    });
+    const writer = new WriterAgent({ provider, accessors });
+
+    const proposal = await writer.run(
+      { brief: "Scrivi sul cibo in Giappone", voice: VOICE },
+      { tenantId: TENANT },
+    );
+
+    // The Writer ran against the tenant's own key, not the platform key.
+    expect(seenKeys).toEqual(["sk-tenant-key"]);
+    expect(tenantPort.calls).toBe(1);
+    expect(proposal.payload.draft).toBe(PERSONAL_DRAFT);
+    expect(proposal.agentId).toBe("writer");
+  });
+
+  it("rejects construction without exactly one LLM source", () => {
+    const { accessors } = fakeAccessors();
+    expect(() => new WriterAgent({ accessors })).toThrow(/exactly one/);
   });
 });

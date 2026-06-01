@@ -34,6 +34,23 @@ describe("tenant settings contracts", () => {
     expect(tenantSettingsSchema.safeParse(merged).success).toBe(true);
   });
 
+  it("defaults aiProvider to the platform/stub connector (metadata only)", () => {
+    expect(DEFAULT_TENANT_SETTINGS.aiProvider).toEqual({ connector: "stub" });
+    // Legacy rows with no aiProvider still parse and inherit the default.
+    const parsed = tenantSettingsSchema.parse({
+      brandVoice: { tone: "", audience: "" },
+      specialistAutonomy: DEFAULT_TENANT_SETTINGS.specialistAutonomy,
+      channels: DEFAULT_TENANT_SETTINGS.channels,
+    });
+    expect(parsed.aiProvider).toEqual({ connector: "stub" });
+    expect(withSettingsDefaults({}).aiProvider).toEqual({ connector: "stub" });
+  });
+
+  it("rejects an unknown aiProvider connector", () => {
+    const bad = { ...DEFAULT_TENANT_SETTINGS, aiProvider: { connector: "openai" } };
+    expect(tenantSettingsSchema.safeParse(bad).success).toBe(false);
+  });
+
   it("rejects an invalid autonomy level", () => {
     const bad = {
       ...DEFAULT_TENANT_SETTINGS,
