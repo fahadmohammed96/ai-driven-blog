@@ -1,34 +1,15 @@
 import type { Embedder } from "./embedder";
 import type { LlmPort } from "./llm";
+import { WriterAgent } from "./agents/writer-agent";
 
-export interface BrandVoice {
-  tone: string;
-  audience: string;
-}
-
-export function renderSystemPrompt(voice: BrandVoice): string {
-  return [
-    "Sei un redattore di blog di viaggio.",
-    `Tono: ${voice.tone}.`,
-    `Pubblico: ${voice.audience}.`,
-    "Scrivi in questa voce. L'AI propone, l'umano conferma.",
-  ].join(" ");
-}
-
-export function buildPrompt(brief: string, context: string[], feedbackHint?: string): string {
-  const ctx = context.length
-    ? `Contesto dai contenuti dell'utente:\n${context
-        .map((c, i) => `[${i + 1}] ${c}`)
-        .join("\n")}\n\n`
-    : "";
-  // The metric-derived hint from the feedback loop (Slice 2) — a REAL input that
-  // observably shapes the generation prompt. The LLM stays stubbed at the
-  // boundary; what changes is the instruction it receives (ADR-0026).
-  const hint = feedbackHint?.trim()
-    ? `Indicazione dai dati (loop di feedback): ${feedbackHint.trim()}\n\n`
-    : "";
-  return `${ctx}${hint}Brief: ${brief}\n\nScrivi una bozza di articolo.`;
-}
+// Brand-voice + prompt assembly moved to `./prompt` to break the pipeline↔Writer
+// import cycle; re-exported so existing callers keep importing from `./pipeline`.
+export {
+  renderSystemPrompt,
+  buildPrompt,
+  type BrandVoice,
+} from "./prompt";
+import type { BrandVoice } from "./prompt";
 
 export interface GenerateDraftDeps {
   embedder: Embedder;
@@ -60,27 +41,39 @@ export interface DraftResult {
   system: string;
 }
 
-/** RAG + brand voice: embed the brief, retrieve context, prompt the LLM. */
+/**
+ * RAG + brand voice draft generation. As of slice A1-writer this is a THIN
+ * WRAPPER over {@link WriterAgent} (the Writer is now a real `AgentRunner`
+ * client): identical external behaviour — same RAG retrieval, same brand-voice
+ * system prompt, same single-shot draft for the deterministic stub — so every
+ * caller (`itineraries.controller.ts`, …) is untouched. The Writer adds the
+ * authenticity exit gate on top, which only triggers a (single) retry when the
+ * model returns generic prose; the offline stub draft is first-person and passes
+ * it on the first turn, keeping CI/E2E to one round-trip.
+ */
 export async function generateDraft(
   deps: GenerateDraftDeps,
   input: GenerateDraftInput,
 ): Promise<DraftResult> {
-  const queryEmbedding = await deps.embedder.embed(input.brief);
-  const usedContext = await deps.retrieve(input.tenantId, queryEmbedding, input.k ?? 3);
-  const system = renderSystemPrompt(input.voice);
-  const prompt = buildPrompt(input.brief, usedContext, input.feedbackHint);
-  // Single-shot generation via the generalized port — same external behaviour as
-  // before (no tools, one round-trip, `balanced` tier == the previous Sonnet).
-  // tenantId/agentId/runId are carried for the metering+audit that R1-B/A1 add;
-  // the Writer becomes a real AgentRunner client in slice A1-writer.
-  const response = await deps.llm.complete({
-    tenantId: input.tenantId,
-    agentId: "writer",
-    runId: "generate-draft",
-    model: "balanced",
-    system: [{ type: "text", text: system }],
-    messages: [{ role: "user", content: prompt }],
-    maxTokens: 1500,
+  const writer = new WriterAgent({
+    llm: deps.llm,
+    accessors: {
+      embed: (text) => deps.embedder.embed(text),
+      retrieve: deps.retrieve,
+    },
   });
-  return { draft: response.content, usedContext, system };
+  const proposal = await writer.run(
+    {
+      brief: input.brief,
+      voice: input.voice,
+      ...(input.k !== undefined ? { k: input.k } : {}),
+      ...(input.feedbackHint !== undefined ? { feedbackHint: input.feedbackHint } : {}),
+    },
+    { tenantId: input.tenantId },
+  );
+  return {
+    draft: proposal.payload.draft,
+    usedContext: proposal.payload.usedContext,
+    system: proposal.payload.system,
+  };
 }

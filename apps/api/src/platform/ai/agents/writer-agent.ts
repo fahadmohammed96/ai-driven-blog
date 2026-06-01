@@ -1,0 +1,232 @@
+import type { Proposal } from "@blogs/contracts";
+import {
+  AgentRunner,
+  type AgentInput,
+  type RunContext,
+  type RunLogger,
+} from "../agent-runner";
+import type { AgentDefinition } from "../agent-registry";
+import { ToolRegistry } from "../tool-registry";
+import type { LlmPort } from "../llm";
+import type { SchemaLike, ToolDefinition } from "../tools";
+import type { BudgetGuard } from "../budget-guard";
+import type { AgentRunStore } from "../agent-run-store";
+import { buildPrompt, renderSystemPrompt, type BrandVoice } from "../prompt";
+import {
+  scoreAuthenticity,
+  buildAuthenticityFeedbackHint,
+  AUTHENTICITY_THRESHOLD,
+} from "./tools/score-authenticity";
+import {
+  createRetrieveContextTool,
+  type RetrieveContextAccessor,
+} from "./tools/retrieve-context";
+import {
+  createGetBrandVoiceTool,
+  type GetBrandVoiceAccessor,
+} from "./tools/get-brand-voice";
+import {
+  createGetItineraryTool,
+  type GetItineraryAccessor,
+} from "./tools/get-itinerary";
+import {
+  createGetMediaForStopTool,
+  type GetMediaForStopAccessor,
+} from "./tools/get-media-for-stop";
+
+/**
+ * WriterAgent — the FIRST real agent on `AgentRunner` (agentic-plan Slice
+ * A1-writer). It validates the pattern every later specialist (SEO/Social/Email)
+ * reuses: a static `AgentDefinition` + injected, boundary-respecting tools, an
+ * `scoreAuthenticity` EXIT GATE (not a tool, critica #4), driven by the generic
+ * runner — no loop code here.
+ *
+ * BOUNDARY (the arch-test does NOT police `platform/*` — we do): the Writer's
+ * data tools are wired via INJECTED accessors. The kernel never imports
+ * `modules/*`/`verticals/*`; the caller (e.g. `itineraries.controller.ts`, which
+ * MAY import travel/media) supplies accessors that adapt module data into the
+ * tools' local, serialisable shapes — exactly the pattern `generateDraft` set.
+ *
+ * The Writer's payload is an {@link ArticleDraft}. Today it lands as a draft in
+ * the Phase-1 publication state machine (the same sink `generateDraft` fed);
+ * `agent_proposals` staging arrives in T1. See DEBT-022.
+ */
+
+/** The Writer's `content_draft` payload — the same fields `generateDraft` returns. */
+export interface ArticleDraft {
+  /** The generated article text. */
+  draft: string;
+  /** RAG chunks retrieved up front and woven into the prompt (backward compat). */
+  usedContext: string[];
+  /** The brand-voice system prompt used for this run. */
+  system: string;
+}
+
+/** Data accessors injected at the boundary (see BOUNDARY note above). */
+export interface WriterAccessors {
+  embed(text: string): Promise<number[]>;
+  retrieve(tenantId: string, embedding: number[], k: number): Promise<string[]>;
+  /** Optional: only registered as a tool when supplied by the caller. */
+  getBrandVoice?: GetBrandVoiceAccessor;
+  getItinerary?: GetItineraryAccessor;
+  getMediaForStop?: GetMediaForStopAccessor;
+}
+
+export interface WriterAgentDeps {
+  llm: LlmPort;
+  accessors: WriterAccessors;
+  /** Defaults to a no-op store: `generateDraft`'s sink is unchanged (DEBT-022). */
+  store?: AgentRunStore;
+  /** Defaults to an always-ok guard (no DB to meter the bare `generateDraft` path). */
+  budget?: BudgetGuard;
+  logger?: RunLogger;
+}
+
+export interface WriterRunInput {
+  brief: string;
+  voice: BrandVoice;
+  k?: number;
+  /** Metric-derived feedback-loop hint, woven into the prompt (ADR-0026). */
+  feedbackHint?: string;
+  /** Idempotency subject; defaults to the brief. */
+  subjectId?: string;
+}
+
+const DEFAULT_K = 3;
+
+/** No-op store: the bare `generateDraft` path persists no audit row (DEBT-022). */
+const NOOP_RUN_STORE: AgentRunStore = {
+  findByTaskId: async () => null,
+  record: async () => {},
+};
+
+/** Always-ok budget: no DB to meter against on the bare `generateDraft` path. */
+const OK_BUDGET: BudgetGuard = { check: async () => {} };
+
+/**
+ * Static, identifying fields of the Writer definition (agentic-plan §"Loop
+ * limitati": balanced tier, 4 steps = gather + 1 draft + ≤1 authenticity retry).
+ * `systemPrompt`/`allowedTools`/schemas are overlaid per run (the brand voice and
+ * the available accessors are tenant/call specific).
+ */
+const WRITER_DEF_BASE = {
+  id: "writer",
+  role: "Redattore di articoli di viaggio nella brand voice del tenant",
+  model: "balanced",
+  maxSteps: 4,
+  maxTokens: 8_000,
+  maxContextTokens: 30_000,
+  budgetCap: { inputTokens: 30_000, outputTokens: 8_000 },
+  autonomyAxis: "writer",
+  proposalType: "content_draft",
+} satisfies Partial<AgentDefinition<ArticleDraft>>;
+
+function articleDraftSchema(): SchemaLike<ArticleDraft> {
+  const valid = (v: unknown): v is ArticleDraft => {
+    const o = v as Partial<ArticleDraft>;
+    return (
+      typeof o === "object" &&
+      o !== null &&
+      typeof o.draft === "string" &&
+      o.draft.length > 0 &&
+      Array.isArray(o.usedContext) &&
+      o.usedContext.every((c) => typeof c === "string") &&
+      typeof o.system === "string"
+    );
+  };
+  return {
+    safeParse: (input) =>
+      valid(input)
+        ? { success: true, data: input }
+        : { success: false, error: "invalid ArticleDraft" },
+    parse: (input) => {
+      if (!valid(input)) throw new Error("invalid ArticleDraft payload");
+      return input;
+    },
+  };
+}
+
+export class WriterAgent {
+  private readonly runner: AgentRunner;
+  private readonly accessors: WriterAccessors;
+  private readonly allowedTools: string[];
+
+  constructor(deps: WriterAgentDeps) {
+    this.accessors = deps.accessors;
+    const tools = buildWriterTools(deps.accessors);
+    this.allowedTools = tools.map((t) => t.id);
+    this.runner = new AgentRunner({
+      llm: deps.llm,
+      tools: new ToolRegistry(tools),
+      store: deps.store ?? NOOP_RUN_STORE,
+      budget: deps.budget ?? OK_BUDGET,
+      ...(deps.logger ? { logger: deps.logger } : {}),
+    });
+  }
+
+  async run(
+    input: WriterRunInput,
+    ctx: { tenantId: string; taskId?: string; triggeredAt?: Date; runId?: string },
+  ): Promise<Proposal<ArticleDraft>> {
+    const k = input.k ?? DEFAULT_K;
+    // Pre-retrieve RAG context and seed it into the prompt, exactly as the
+    // original `generateDraft` did — so even the deterministic stub (no tool
+    // call) produces an IDENTICAL draft (backward compat). The `retrieveContext`
+    // tool lets a real model fetch *more*, but the seed guarantees the baseline.
+    const queryEmbedding = await this.accessors.embed(input.brief);
+    const usedContext = await this.accessors.retrieve(ctx.tenantId, queryEmbedding, k);
+    const system = renderSystemPrompt(input.voice);
+    const prompt = buildPrompt(input.brief, usedContext, input.feedbackHint);
+
+    const def: AgentDefinition<ArticleDraft> = {
+      ...WRITER_DEF_BASE,
+      systemPrompt: system,
+      allowedTools: this.allowedTools,
+      outputSchema: articleDraftSchema(),
+      // The LLM emits the article text; the structured payload closes over the
+      // pre-retrieved context + rendered system (the runner only sees `content`).
+      parseOutput: (content) => ({ draft: content, usedContext, system }),
+      // EXIT GATE (critica #4): the runner calls this after end_turn. A low score
+      // appends a deterministic hint for exactly ONE retry; never an LLM tool.
+      exitGate: (payload) => {
+        const score = scoreAuthenticity(payload.draft);
+        return score < AUTHENTICITY_THRESHOLD
+          ? { feedbackHint: buildAuthenticityFeedbackHint(score) }
+          : null;
+      },
+    };
+
+    const agentInput: AgentInput = {
+      subjectId: input.subjectId ?? input.brief,
+      content: prompt,
+    };
+    const runCtx: RunContext = {
+      tenantId: ctx.tenantId,
+      ...(ctx.taskId ? { taskId: ctx.taskId } : {}),
+      ...(ctx.triggeredAt ? { triggeredAt: ctx.triggeredAt } : {}),
+      ...(ctx.runId ? { runId: ctx.runId } : {}),
+    };
+    return this.runner.run<ArticleDraft>(def, agentInput, runCtx);
+  }
+}
+
+/** Build the Writer's tool palette from whatever accessors the caller supplied. */
+function buildWriterTools(accessors: WriterAccessors): ToolDefinition[] {
+  const retrieveAcc: RetrieveContextAccessor = {
+    embed: accessors.embed,
+    retrieve: accessors.retrieve,
+  };
+  const tools: ToolDefinition[] = [
+    createRetrieveContextTool(retrieveAcc) as ToolDefinition,
+  ];
+  if (accessors.getBrandVoice) {
+    tools.push(createGetBrandVoiceTool(accessors.getBrandVoice) as ToolDefinition);
+  }
+  if (accessors.getItinerary) {
+    tools.push(createGetItineraryTool(accessors.getItinerary) as ToolDefinition);
+  }
+  if (accessors.getMediaForStop) {
+    tools.push(createGetMediaForStopTool(accessors.getMediaForStop) as ToolDefinition);
+  }
+  return tools;
+}
