@@ -67,6 +67,9 @@ interface ProposalView {
   draftPreview: string;
   reasoning: { name: string; input: unknown }[];
   researchContext: unknown | null;
+  /** Slice O1: the Analyst report's narrative, surfaced for `analyst_insight`. */
+  insights: string[];
+  recommendations: string[];
   createdAt: Date;
 }
 
@@ -248,8 +251,20 @@ export class AgentProposalsController {
 }
 
 function toView(p: StagedProposal): ProposalView {
-  const payload = (p.payload ?? {}) as { draft?: string; title?: string };
+  const payload = (p.payload ?? {}) as {
+    draft?: string;
+    title?: string;
+    insights?: unknown;
+    recommendations?: unknown;
+  };
   const draft = typeof payload.draft === "string" ? payload.draft : "";
+  // INFORMATIVE proposals (Slice O1) carry no `draft`/`title`; surface their
+  // narrative and a meaningful fallback title instead of the generic "Bozza AI".
+  const strings = (v: unknown): string[] =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const insights = p.type === "analyst_insight" ? strings(payload.insights) : [];
+  const recommendations = p.type === "analyst_insight" ? strings(payload.recommendations) : [];
+  const fallbackTitle = p.type === "analyst_insight" ? "Report performance" : "Bozza AI";
   return {
     id: p.id,
     agentName: p.agentName,
@@ -259,10 +274,12 @@ function toView(p: StagedProposal): ProposalView {
     tokensUsed: p.tokensUsed,
     agentDefinitionVersion: p.agentDefinitionVersion,
     rationale: p.rationale,
-    title: payload.title?.trim() || draft.split("\n").map((l) => l.trim()).find(Boolean) || "Bozza AI",
+    title: payload.title?.trim() || draft.split("\n").map((l) => l.trim()).find(Boolean) || fallbackTitle,
     draftPreview: draft.slice(0, 280),
     reasoning: p.toolCalls.map((c) => ({ name: c.name, input: c.input })),
     researchContext: p.researchContext,
+    insights,
+    recommendations,
     createdAt: p.createdAt,
   };
 }

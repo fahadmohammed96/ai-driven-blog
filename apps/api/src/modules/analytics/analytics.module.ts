@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 // Depend on other modules via their public barrels, never their internals.
 import { TenancyModule } from "../tenancy";
 import { AnalyticsController } from "./analytics.controller";
+import { AnalyticsAgentController } from "./analytics-agent.controller";
 import { AnalyticsService } from "./analytics.service";
 import { ANALYTICS_SOURCES } from "./source.port";
 import { createAnalyticsSources } from "./sources";
@@ -15,7 +16,7 @@ import { createAnalyticsSources } from "./sources";
  */
 @Module({
   imports: [TenancyModule],
-  controllers: [AnalyticsController],
+  controllers: [AnalyticsController, AnalyticsAgentController],
   providers: [
     AnalyticsService,
     { provide: ANALYTICS_SOURCES, useFactory: createAnalyticsSources },

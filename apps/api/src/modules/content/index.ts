@@ -30,6 +30,7 @@ export {
   ProposalNotPendingError,
   EmailSinkNotConfiguredError,
   type AgentProposalStore,
+  type AcknowledgedProposal,
   type StagedProposal,
   type EmailDraftSink,
 } from "./agent-proposal-store";

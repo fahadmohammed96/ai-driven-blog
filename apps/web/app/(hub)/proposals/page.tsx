@@ -44,6 +44,9 @@ interface AgentProposal {
   reasoning: { name: string; input: unknown }[];
   /** Present only when the external-research flag was on (Slice X1). */
   researchContext: ResearchContext | null;
+  /** The Analyst report's narrative (Slice O1) — present for `analyst_insight`. */
+  insights: string[];
+  recommendations: string[];
 }
 
 /** Edit a proposal = open it in the slice-2 Block Editor (same URL contract). */
@@ -220,6 +223,41 @@ export default function ProposalsSurface() {
                       </ul>
                     )}
                   </details>
+
+                  {/* Slice O1 — Analyst report: insights + recommendations (plain
+                      text, React-escaped — no href, output-safe). Shown only for
+                      `analyst_insight`, which carries no draft to preview. */}
+                  {p.type === "analyst_insight" &&
+                    (p.insights.length > 0 || p.recommendations.length > 0) && (
+                      <div data-testid="agent-proposal-insights" style={{ display: "grid", gap: space.xs }}>
+                        {p.insights.length > 0 && (
+                          <div>
+                            <span style={{ fontSize: font.size.sm, color: color.textMuted }}>Insight</span>
+                            <ul style={{ margin: `${space.xs} 0 0`, paddingLeft: "1.25rem" }}>
+                              {p.insights.map((s, i) => (
+                                <li key={i} style={{ color: color.text, fontSize: font.size.sm }}>
+                                  {s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {p.recommendations.length > 0 && (
+                          <div>
+                            <span style={{ fontSize: font.size.sm, color: color.textMuted }}>
+                              Raccomandazioni
+                            </span>
+                            <ul style={{ margin: `${space.xs} 0 0`, paddingLeft: "1.25rem" }}>
+                              {p.recommendations.map((s, i) => (
+                                <li key={i} style={{ color: color.text, fontSize: font.size.sm }}>
+                                  {s}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                   {/* Slice X1 — "Fonti usate dal Ricercatore": shown only when the
                       external-research flag enriched this proposal (critica #14). */}

@@ -96,11 +96,24 @@ interface ContentDraftPayload {
   title?: string;
 }
 
+/**
+ * The acknowledge-only approval result for an INFORMATIVE proposal (`analyst_insight`,
+ * Slice O1): there is no content item to return, only the proposal's own id + its
+ * (now `approved`) status. The union `ContentItemRow | AcknowledgedProposal` serves
+ * every informative type the queue may carry (the `ProposalType` union already lists
+ * `editorial_plan`/`lead_classification` as future informative kinds); the unified
+ * gate controller reads only `.id`/`.status`, so the widening is transparent to it.
+ */
+export interface AcknowledgedProposal {
+  id: string;
+  status: string;
+}
+
 export interface AgentProposalStore {
   persist(proposal: Proposal): Promise<void>;
   listPending(tenantId: string): Promise<StagedProposal[]>;
-  /** Inject the approved payload into the Phase-1 state machine; mark approved. */
-  approve(tenantId: string, id: string): Promise<ContentItemRow>;
+  /** Inject the approved payload into its gate sink; mark approved. */
+  approve(tenantId: string, id: string): Promise<ContentItemRow | AcknowledgedProposal>;
   reject(tenantId: string, id: string): Promise<void>;
 }
 
@@ -164,11 +177,15 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
     });
   }
 
-  async approve(tenantId: string, id: string): Promise<ContentItemRow> {
+  async approve(tenantId: string, id: string): Promise<ContentItemRow | AcknowledgedProposal> {
     return withTenant(this.db, tenantId, async (tx) => {
       const row = await selectPending(tx, id);
       // Route by proposal type to the right human-gate sink (agent→gate map). The
-      // gate is always a CONSUMER of the staging table, never bypassed.
+      // gate is always a CONSUMER of the staging table, never bypassed. NOTE: the
+      // explicit `analyst_insight` branch is what keeps an INFORMATIVE report from
+      // falling into the `content_draft` default (`approveContentDraft`), which
+      // would read `row.payload as ContentDraftPayload` and CRASH on a payload that
+      // has no `draft` (Slice O1 design crux).
       const result =
         row.type === "seo_suggestions"
           ? await approveSeoSuggestions(tx, row)
@@ -176,7 +193,9 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
             ? await approveSocialCaptions(tx, tenantId, row)
             : row.type === "email_draft"
               ? await approveEmailDraft(tx, tenantId, row, this.emailSink)
-              : await approveContentDraft(tx, tenantId, row);
+              : row.type === "analyst_insight"
+                ? approveAnalystInsight(row)
+                : await approveContentDraft(tx, tenantId, row);
       await tx
         .update(agentProposals)
         .set({ status: "approved", reviewedAt: sql`now()` })
@@ -284,6 +303,21 @@ async function approveEmailDraft(
   if (!item) throw new ContentNotFoundError(draft.contentItemId);
   await sink.send(tenantId, draft);
   return item;
+}
+
+/**
+ * `analyst_insight` gate (Analyst Agent, Slice O1): ACKNOWLEDGE-ONLY. An Analyst
+ * report is INFORMATIVE — input for the future Orchestrator (O3), not an action.
+ * Approving it = the founder RECOGNISES it: there is NO content/state mutation and
+ * NO publication transition. The outer `approve` flips `status:'approved'` after
+ * this branch; here we only echo the proposal's id + that resulting status. This
+ * is also the guard that keeps the report's `PerformanceReport` payload (which has
+ * no `draft`) OUT of the `content_draft` default that would crash on it.
+ */
+function approveAnalystInsight(
+  row: typeof agentProposals.$inferSelect,
+): AcknowledgedProposal {
+  return { id: row.id, status: "approved" };
 }
 
 /**
