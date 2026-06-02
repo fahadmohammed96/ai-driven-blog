@@ -20,8 +20,13 @@ async function analyze(request: APIRequestContext): Promise<string> {
   const ingest = await request.post(`${API}/analytics/ingest`);
   expect(ingest.ok()).toBeTruthy();
 
+  // Unique periodDays per run so the Analyst's day-bucketed idempotency never
+  // replays a prior (approved) proposal on the PERSISTENT dev DB across gate runs
+  // — mirrors agent-proposals.spec's unique brief. The figures are all-time anyway
+  // (not time-windowed yet, DEBT-038), so this only varies the taskId, not the data.
+  const periodDays = (Date.now() % 100000) + 1;
   const res = await request.post(`${API}/analytics/agent/analyze`, {
-    data: { periodDays: 30, mode: "sync" },
+    data: { periodDays, mode: "sync" },
   });
   expect(res.ok()).toBeTruthy();
   const body = await res.json();
