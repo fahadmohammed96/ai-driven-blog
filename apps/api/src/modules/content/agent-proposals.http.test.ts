@@ -11,7 +11,8 @@ import {
   type StartedPostgreSqlContainer,
 } from "@testcontainers/postgresql";
 import { Pool } from "pg";
-import { withSettingsDefaults, type EmailDraft } from "@blogs/contracts";
+import { eq } from "drizzle-orm";
+import { withSettingsDefaults, type EmailDraft, type ResearchBrief } from "@blogs/contracts";
 import { DB, LLM, EMAIL_DRAFT_SINK } from "../../platform/tokens";
 import { createDb, type Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
@@ -234,5 +235,46 @@ describe("agent-proposals HTTP (Slice T1)", () => {
   it("surfaces the same un-audited proposal under auditPolicy=best-effort", async () => {
     await setAuditPolicy("best-effort");
     expect(await listIds()).toContain(unauditedId);
+  });
+
+  // Slice X1 — the externalResearch flag drives whether the Writer proposal is
+  // enriched with a Researcher brief and carries `research_context` (critica #14).
+  async function researchContextOf(id: string): Promise<unknown> {
+    return withTenant(db, TENANT, async (tx) => {
+      const rows = await tx
+        .select({ rc: agentProposals.researchContext })
+        .from(agentProposals)
+        .where(eq(agentProposals.id, id));
+      return rows[0]?.rc ?? null;
+    });
+  }
+
+  it("flag ON → the staged Writer proposal carries a populated research_context", async () => {
+    await withTenant(db, TENANT, (tx) =>
+      upsertTenantSettings(tx, TENANT, withSettingsDefaults({ externalResearch: { enabled: true } })),
+    );
+    const res = await request(app.getHttpServer())
+      .post("/agent-proposals/generate")
+      .send({ brief: "Un weekend a Osaka" })
+      .expect(201);
+
+    const rc = (await researchContextOf(res.body.id)) as ResearchBrief | null;
+    expect(rc).not.toBeNull();
+    expect(Array.isArray(rc!.facts)).toBe(true);
+    expect(Array.isArray(rc!.sources)).toBe(true);
+    // External research on → the stub SERP surfaced at least one source.
+    expect(rc!.sources.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("flag OFF → the staged Writer proposal has no research_context (path invariant)", async () => {
+    await withTenant(db, TENANT, (tx) =>
+      upsertTenantSettings(tx, TENANT, withSettingsDefaults({ externalResearch: { enabled: false } })),
+    );
+    const res = await request(app.getHttpServer())
+      .post("/agent-proposals/generate")
+      .send({ brief: "Un weekend a Hakone" })
+      .expect(201);
+
+    expect(await researchContextOf(res.body.id)).toBeNull();
   });
 });

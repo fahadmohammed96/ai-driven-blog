@@ -20,6 +20,9 @@ import { PostgresMeteringService } from "../../platform/ai/metering";
 import { TwoLevelBudgetGuard, BudgetExceededError } from "../../platform/ai/budget-guard";
 import { PostgresAgentRunStore } from "../../platform/ai/agent-run-store";
 import { WriterAgent } from "../../platform/ai/agents/writer-agent";
+import { ResearcherAgent } from "../../platform/ai/agents/researcher-agent";
+import { STUB_SEARCH_SOURCES } from "../../platform/ai/agents/tools/search-sources";
+import type { ResearchBrief } from "@blogs/contracts";
 import type { BrandVoice } from "../../platform/ai/pipeline";
 import { TenancyService } from "../tenancy";
 import { getTenantSettings } from "../settings";
@@ -73,6 +76,13 @@ export class AgentProposalsController {
   private readonly metering: PostgresMeteringService;
   private readonly budget: TwoLevelBudgetGuard;
   private readonly writer: WriterAgent;
+  /**
+   * The Researcher (Slice X1). Built with the SAME BYOK-aware provider + run-audit
+   * store + budget as the Writer (its runs are metered/budgeted too). It is RUN
+   * only when the tenant's `externalResearch` flag is on (see `generate`); its
+   * external `searchSources` tool is the deterministic offline stub (DEBT-034).
+   */
+  private readonly researcher: ResearcherAgent;
 
   constructor(
     @Inject(DB) private readonly db: Db,
@@ -101,13 +111,26 @@ export class AgentProposalsController {
       budget: this.budget,
     });
     const embedder = new HashingEmbedder();
+    const runStore = new PostgresAgentRunStore(db);
     this.writer = new WriterAgent({
       provider,
       accessors: {
         embed: (text) => embedder.embed(text),
         retrieve: (tenantId, embedding, k) => retrieveSimilar(db, tenantId, embedding, k),
       },
-      store: new PostgresAgentRunStore(db),
+      store: runStore,
+      budget: this.budget,
+    });
+    this.researcher = new ResearcherAgent({
+      provider,
+      accessors: {
+        embed: (text) => embedder.embed(text),
+        retrieve: (tenantId, embedding, k) => retrieveSimilar(db, tenantId, embedding, k),
+        // External SERP is the deterministic offline stub at the boundary (DEBT-034):
+        // no network, no key, zero cost in CI/E2E.
+        searchSources: STUB_SEARCH_SOURCES,
+      },
+      store: runStore,
       budget: this.budget,
     });
   }
@@ -125,22 +148,43 @@ export class AgentProposalsController {
   @Post("generate")
   @HttpCode(201)
   async generate(
-    @Body() body: { brief?: unknown; title?: unknown } | undefined,
+    @Body() body: { brief?: unknown; title?: unknown; itineraryId?: unknown } | undefined,
   ): Promise<{ id: string; status: string }> {
     const brief = body?.brief;
     if (typeof brief !== "string" || !brief.trim()) {
       throw new BadRequestException("brief is required");
     }
     const title = typeof body?.title === "string" ? body.title : undefined;
+    const itineraryId = typeof body?.itineraryId === "string" ? body.itineraryId : undefined;
+    const tenantId = this.tenantId;
     try {
+      // Slice X1: when the tenant opted into external research, run the Researcher
+      // FIRST and enrich the Writer with its ephemeral brief. With the flag OFF
+      // the Researcher never runs and `researchContext` stays absent — the path is
+      // byte-for-byte the previous Writer-only flow (cost-zero invariant).
+      const settings = await withTenant(this.db, tenantId, (tx) => getTenantSettings(tx));
+      let researchContext: ResearchBrief | undefined;
+      if (settings.externalResearch.enabled) {
+        researchContext = await this.researcher.run(
+          { topic: brief, externalEnabled: true, ...(itineraryId ? { itineraryId } : {}) },
+          { tenantId },
+        );
+      }
+
       const proposal = await this.writer.run(
-        { brief, voice: DEFAULT_VOICE },
-        { tenantId: this.tenantId },
+        { brief, voice: DEFAULT_VOICE, ...(researchContext ? { researchContext } : {}) },
+        { tenantId },
       );
       // Fold the human-facing title into the staged payload so approval can mint
       // a content item without re-deriving it (the Writer payload is text-only).
       const payload = { ...(proposal.payload as object), ...(title ? { title } : {}) };
-      await this.proposals.persist({ ...proposal, payload });
+      // Lay the brief onto the staged proposal for the human gate (critica #14);
+      // the store persists `research_context` only when present.
+      await this.proposals.persist({
+        ...proposal,
+        payload,
+        ...(researchContext ? { researchContext } : {}),
+      });
       return { id: proposal.id, status: proposal.status };
     } catch (err) {
       if (err instanceof BudgetExceededError) throw new ConflictException(err.message);

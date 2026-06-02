@@ -1,4 +1,4 @@
-import type { Proposal } from "@blogs/contracts";
+import type { Proposal, ResearchBrief } from "@blogs/contracts";
 import {
   AgentRunner,
   type AgentInput,
@@ -120,6 +120,13 @@ export interface WriterRunInput {
   contentItemId?: string;
   /** Idempotency subject; defaults to the brief. */
   subjectId?: string;
+  /**
+   * The Researcher's ephemeral brief (Slice X1). When present it is woven into
+   * the prompt (`buildPrompt`'s research block) — and the caller also lays it onto
+   * `Proposal.researchContext` for the human gate. Absent → the prompt is
+   * byte-identical to before (backward compat).
+   */
+  researchContext?: ResearchBrief;
 }
 
 const DEFAULT_K = 3;
@@ -238,7 +245,12 @@ export class WriterAgent {
     const queryEmbedding = await this.accessors.embed(input.brief);
     const usedContext = await this.accessors.retrieve(ctx.tenantId, queryEmbedding, k);
     const system = renderSystemPrompt(input.voice);
-    const prompt = buildPrompt(input.brief, usedContext, input.feedbackHint);
+    const prompt = buildPrompt(
+      input.brief,
+      usedContext,
+      input.feedbackHint,
+      input.researchContext,
+    );
 
     // Offer `getFeedbackSignal` only stand-alone (A2): a contentItemId to refine,
     // its accessor wired, and NO hint already in the prompt (pre-injection is free

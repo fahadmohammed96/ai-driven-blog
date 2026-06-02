@@ -21,6 +21,15 @@ interface ProposalItem {
   title: string;
 }
 
+/** The Researcher's ephemeral brief, surfaced for transparency (Slice X1). */
+interface ResearchContext {
+  facts: string[];
+  sources: { title: string; url: string }[];
+  keyInsights: string[];
+  gapsToFill: string[];
+  rationale: string;
+}
+
 /** A staged AI-agent proposal (Slice T1): cost + reasoning + definition version. */
 interface AgentProposal {
   id: string;
@@ -33,6 +42,8 @@ interface AgentProposal {
   title: string;
   draftPreview: string;
   reasoning: { name: string; input: unknown }[];
+  /** Present only when the external-research flag was on (Slice X1). */
+  researchContext: ResearchContext | null;
 }
 
 /** Edit a proposal = open it in the slice-2 Block Editor (same URL contract). */
@@ -209,6 +220,37 @@ export default function ProposalsSurface() {
                       </ul>
                     )}
                   </details>
+
+                  {/* Slice X1 — "Fonti usate dal Ricercatore": shown only when the
+                      external-research flag enriched this proposal (critica #14). */}
+                  {p.researchContext &&
+                    (p.researchContext.facts.length > 0 || p.researchContext.sources.length > 0) && (
+                      <details data-testid="agent-proposal-research">
+                        <summary style={{ cursor: "pointer", fontSize: font.size.sm, color: color.textMuted }}>
+                          Fonti usate dal Ricercatore
+                        </summary>
+                        {p.researchContext.facts.length > 0 && (
+                          <ul style={{ margin: `${space.xs} 0 0`, paddingLeft: "1.25rem" }}>
+                            {p.researchContext.facts.map((f, i) => (
+                              <li key={i} style={{ color: color.textMuted, fontSize: font.size.sm }}>
+                                {f}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {p.researchContext.sources.length > 0 && (
+                          <ul style={{ margin: `${space.xs} 0 0`, paddingLeft: "1.25rem" }}>
+                            {p.researchContext.sources.map((s, i) => (
+                              <li key={i} style={{ color: color.textMuted, fontSize: font.size.sm }}>
+                                <a href={s.url} target="_blank" rel="noreferrer">
+                                  {s.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </details>
+                    )}
 
                   <span style={{ display: "flex", alignItems: "center", gap: space.sm }}>
                     <button

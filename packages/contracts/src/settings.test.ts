@@ -61,6 +61,21 @@ describe("tenant settings contracts", () => {
     expect(withSettingsDefaults({ auditPolicy: "best-effort" }).auditPolicy).toBe("best-effort");
   });
 
+  it("defaults externalResearch to OFF (per-tenant opt-in, Slice X1)", () => {
+    expect(DEFAULT_TENANT_SETTINGS.externalResearch).toEqual({ enabled: false });
+    // Legacy rows with no externalResearch still parse and inherit the opt-OUT default.
+    const parsed = tenantSettingsSchema.parse({
+      brandVoice: { tone: "", audience: "" },
+      specialistAutonomy: DEFAULT_TENANT_SETTINGS.specialistAutonomy,
+      channels: DEFAULT_TENANT_SETTINGS.channels,
+    });
+    expect(parsed.externalResearch).toEqual({ enabled: false });
+    expect(withSettingsDefaults({}).externalResearch).toEqual({ enabled: false });
+    expect(withSettingsDefaults({ externalResearch: { enabled: true } }).externalResearch).toEqual({
+      enabled: true,
+    });
+  });
+
   it("rejects an unknown auditPolicy", () => {
     const bad = { ...DEFAULT_TENANT_SETTINGS, auditPolicy: "lax" };
     expect(tenantSettingsSchema.safeParse(bad).success).toBe(false);

@@ -14,6 +14,8 @@
  * envelope, one gate contract, and one audit shape.
  */
 
+import type { ResearchBrief } from "./research";
+
 /**
  * `invalid` marks a run that finished without a schema-valid payload (a truncated
  * run whose partial output failed `outputSchema`, DEBT-029). The human gate hides
@@ -35,7 +37,11 @@ export type ProposalType =
   | "social_captions"
   | "email_draft"
   | "lead_classification"
-  | "analyst_insight";
+  | "analyst_insight"
+  // EPHEMERAL (Slice X1): the Researcher's run emits a `Proposal<ResearchBrief>`
+  // of this type, but it is NEVER staged in `agent_proposals` and has NO approval
+  // gate — the caller only reads `.payload` to enrich the Writer (critica #9).
+  | "research_brief";
 
 /** Token usage attributed to the run (sum across its LLM round-trips). */
 export interface ProposalTokens {
@@ -69,8 +75,10 @@ export interface Proposal<T = unknown> {
    * The Researcher's transparency brief, surfaced in the Writer's card when the
    * external-sources flag is on (agentic-plan §6, critica #14). Ephemeral on the
    * run; persisted to `agent_proposals.research_context` when present. Absent for
-   * every agent that does no external research.
+   * every agent that does no external research. Tightened from `unknown` to the
+   * concrete {@link ResearchBrief} in Slice X1 (store/controller treat it as
+   * display-only, so the change is low-risk).
    */
-  researchContext?: unknown;
+  researchContext?: ResearchBrief;
   createdAt: Date;
 }

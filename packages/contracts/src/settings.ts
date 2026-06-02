@@ -105,6 +105,23 @@ export type AuditPolicy = z.infer<typeof auditPolicySchema>;
 export const AUDIT_POLICIES = auditPolicySchema.options;
 export const DEFAULT_AUDIT_POLICY: AuditPolicy = "obbligatorio";
 
+/**
+ * External research opt-in (agentic-plan Slice X1) — per-tenant, OFF by default.
+ *
+ * When `enabled`, the Writer generation flow runs the Researcher agent first and
+ * lets it reach the `searchSources` boundary tool (web sources). When OFF (the
+ * default), the Researcher never runs on that path and NO external source is
+ * reachable — the cost-zero invariant. Modelled as an object (not a bare boolean)
+ * to leave room for future knobs (rate-limit, provider) without re-touching every
+ * settings deep-equal. `.default()` so legacy settings rows still parse and
+ * inherit the opt-OUT default.
+ */
+export const externalResearchSchema = z.object({
+  enabled: z.boolean(),
+});
+export type ExternalResearchSetting = z.infer<typeof externalResearchSchema>;
+export const DEFAULT_EXTERNAL_RESEARCH: ExternalResearchSetting = { enabled: false };
+
 export const tenantSettingsSchema = z.object({
   brandVoice: brandVoiceSchema,
   specialistAutonomy: specialistAutonomySchema,
@@ -112,6 +129,7 @@ export const tenantSettingsSchema = z.object({
   budgetUsdMonthly: z.number().nonnegative().default(DEFAULT_BUDGET_USD_MONTHLY),
   aiProvider: aiProviderSchema.default(DEFAULT_AI_PROVIDER),
   auditPolicy: auditPolicySchema.default(DEFAULT_AUDIT_POLICY),
+  externalResearch: externalResearchSchema.default(DEFAULT_EXTERNAL_RESEARCH),
 });
 export type TenantSettings = z.infer<typeof tenantSettingsSchema>;
 
@@ -128,6 +146,7 @@ export const DEFAULT_TENANT_SETTINGS: TenantSettings = {
   budgetUsdMonthly: DEFAULT_BUDGET_USD_MONTHLY,
   aiProvider: DEFAULT_AI_PROVIDER,
   auditPolicy: DEFAULT_AUDIT_POLICY,
+  externalResearch: DEFAULT_EXTERNAL_RESEARCH,
 };
 
 /**
@@ -147,5 +166,9 @@ export function withSettingsDefaults(partial?: unknown): TenantSettings {
     budgetUsdMonthly: p.budgetUsdMonthly ?? DEFAULT_TENANT_SETTINGS.budgetUsdMonthly,
     aiProvider: p.aiProvider ?? DEFAULT_TENANT_SETTINGS.aiProvider,
     auditPolicy: p.auditPolicy ?? DEFAULT_TENANT_SETTINGS.auditPolicy,
+    externalResearch: {
+      ...DEFAULT_TENANT_SETTINGS.externalResearch,
+      ...(p.externalResearch ?? {}),
+    },
   };
 }

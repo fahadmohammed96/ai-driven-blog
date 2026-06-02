@@ -92,6 +92,7 @@ const FOUNDER_SETTINGS: TenantSettings = {
   budgetUsdMonthly: 50,
   aiProvider: { connector: "stub" },
   auditPolicy: "obbligatorio",
+  externalResearch: { enabled: false },
 };
 
 describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
@@ -164,6 +165,7 @@ describe("tenant settings HTTP (GET/PUT, persistence + RLS)", () => {
       budgetUsdMonthly: 50,
       aiProvider: { connector: "stub" },
       auditPolicy: "best-effort",
+      externalResearch: { enabled: true },
     };
     // Seed OTHER's settings directly under OTHER's tenant context.
     await withTenant(db, OTHER, (tx) => upsertTenantSettings(tx, OTHER, foreign));
