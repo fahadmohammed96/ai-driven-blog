@@ -163,6 +163,7 @@ describe("content_items.seo_proposal (Docker, as app_rw)", () => {
 
     const returned = await store.approve(TENANT_A, "cccccccc-cccc-cccc-cccc-cccccccccccc");
     // The gate returns the annotated content item; status is unchanged (no publish transition).
+    if (!("seoProposal" in returned)) throw new Error("expected a ContentItemRow from seo_suggestions approve");
     expect(returned.id).toBe(created.id);
     expect(returned.status).toBe(created.status);
     expect(returned.seoProposal?.primaryKeyword).toBe("viaggio");

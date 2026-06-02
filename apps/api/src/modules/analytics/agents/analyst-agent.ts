@@ -164,7 +164,7 @@ export class AnalystAgent {
       signal.topChannel
         ? `Il canale con più engagement è "${signal.topChannel}".`
         : "Nessun segnale di engagement nelle metriche del periodo.",
-      `Analizzati ${channelBreakdown.length} canale/i e ${topContent.length} contenuto/i sul periodo di ${input.periodDays} giorni.`,
+      `Analizzati ${channelBreakdown.length} canale/i e ${topContent.length} contenuto/i (snapshot corrente; il filtro per gli ultimi ${input.periodDays} giorni arriverà con la finestratura temporale — DEBT-038).`,
     ];
     if (signal.underperformers.length) {
       seedInsights.push(`Canali sotto la media: ${signal.underperformers.join(", ")}.`);
@@ -196,9 +196,10 @@ export class AnalystAgent {
     const llm = await this.resolveLlm(ctx.tenantId);
     const runner = new AgentRunner({ llm, tools: registry, ...this.runnerDeps });
     // `subjectId` (idempotency) folds EVERY input that shapes the output: tenant,
-    // period AND mode — so a re-run with a different period (or mode) is NOT a
-    // replay of the wrong report (lezioni S1/S2).
-    const subjectId = `${ctx.tenantId}|days:${input.periodDays}|mode:${input.mode}`;
+    // period, mode AND topLimit (it sizes `topContent`) — so a re-run with a
+    // different period/mode/topLimit is NOT a replay of the wrong report (lezioni
+    // S1/S2/X1-F1).
+    const subjectId = `${ctx.tenantId}|days:${input.periodDays}|mode:${input.mode}|top:${topLimit}`;
     const agentInput: AgentInput = {
       subjectId,
       content: JSON.stringify({ periodDays: input.periodDays, channelBreakdown, topContent }),

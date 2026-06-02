@@ -155,6 +155,19 @@ describe("AnalystAgent.run", () => {
     expect(p2.id).toBe(p2.runId);
   });
 
+  it("a DIFFERENT topLimit is NOT a replay (topLimit sizes topContent → re-keys the run)", async () => {
+    const store = memStore();
+    const triggeredAt = new Date("2026-06-01T10:00:00.000Z");
+    const mk = () => new AnalystAgent({ llm: spyLlm().port, accessors: fakeAccessors(), store });
+    const top5 = await mk().run({ periodDays: 30, mode: "sync", topLimit: 5 }, { tenantId: TENANT, triggeredAt });
+    const top2 = await mk().run({ periodDays: 30, mode: "sync", topLimit: 2 }, { tenantId: TENANT, triggeredAt });
+    // With topLimit OUT of the subject these would share a taskId → replay → same id.
+    expect(top2.id).not.toBe(top5.id);
+    // Same identical input (incl. topLimit) → stable id (dedup) holds.
+    const top5b = await mk().run({ periodDays: 30, mode: "sync", topLimit: 5 }, { tenantId: TENANT, triggeredAt });
+    expect(top5b.id).toBe(top5.id);
+  });
+
   it("a DIFFERENT periodDays is NOT a replay (re-keys the run)", async () => {
     const store = memStore();
     const triggeredAt = new Date("2026-06-01T10:00:00.000Z");
