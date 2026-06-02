@@ -242,7 +242,14 @@ export default function ProposalsSurface() {
                           <ul style={{ margin: `${space.xs} 0 0`, paddingLeft: "1.25rem" }}>
                             {p.researchContext.sources.map((s, i) => (
                               <li key={i} style={{ color: color.textMuted, fontSize: font.size.sm }}>
-                                <a href={s.url} target="_blank" rel="noreferrer">
+                                {/* Scheme-guard the href (FIX 2, lezione S3 XSS): defence
+                                    in depth even though the contract now rejects
+                                    non-http(s) URLs — a javascript:/data: url degrades to #. */}
+                                <a
+                                  href={/^https?:\/\//i.test(s.url) ? s.url : "#"}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
                                   {s.title}
                                 </a>
                               </li>

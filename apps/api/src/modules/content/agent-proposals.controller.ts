@@ -148,31 +148,42 @@ export class AgentProposalsController {
   @Post("generate")
   @HttpCode(201)
   async generate(
-    @Body() body: { brief?: unknown; title?: unknown; itineraryId?: unknown } | undefined,
+    @Body() body: { brief?: unknown; title?: unknown } | undefined,
   ): Promise<{ id: string; status: string }> {
     const brief = body?.brief;
     if (typeof brief !== "string" || !brief.trim()) {
       throw new BadRequestException("brief is required");
     }
     const title = typeof body?.title === "string" ? body.title : undefined;
-    const itineraryId = typeof body?.itineraryId === "string" ? body.itineraryId : undefined;
     const tenantId = this.tenantId;
     try {
       // Slice X1: when the tenant opted into external research, run the Researcher
       // FIRST and enrich the Writer with its ephemeral brief. With the flag OFF
       // the Researcher never runs and `researchContext` stays absent — the path is
       // byte-for-byte the previous Writer-only flow (cost-zero invariant).
+      // NOTE: no `itineraryId` is forwarded to the Researcher here — this entrypoint
+      // does NOT wire the `getItinerary`/`getMediaForStop` accessors, so it was dead
+      // input (the Researcher's itinerary branch never fired). Cabling those
+      // accessors is the travel-controller migration → DEBT-035.
       const settings = await withTenant(this.db, tenantId, (tx) => getTenantSettings(tx));
       let researchContext: ResearchBrief | undefined;
       if (settings.externalResearch.enabled) {
         researchContext = await this.researcher.run(
-          { topic: brief, externalEnabled: true, ...(itineraryId ? { itineraryId } : {}) },
+          { topic: brief, externalEnabled: true },
           { tenantId },
         );
       }
 
+      // FIX 1 (X1 review): fold the research dimension into the Writer's idempotency
+      // subject. The Writer's default subjectId is the brief alone, so a re-run with
+      // the same brief/day but the flag flipped OFF→ON would share the flag-OFF
+      // taskId and REPLAY the un-enriched proposal — the tenant pays the Researcher
+      // but the enriched draft is discarded and `research_context` is built on a
+      // stale run. Keying on the flag forks the run so ON yields a fresh, enriched
+      // draft (idempotency-replay class, lezioni S1/S2).
+      const subjectId = `${brief}|research:${settings.externalResearch.enabled}`;
       const proposal = await this.writer.run(
-        { brief, voice: DEFAULT_VOICE, ...(researchContext ? { researchContext } : {}) },
+        { brief, voice: DEFAULT_VOICE, subjectId, ...(researchContext ? { researchContext } : {}) },
         { tenantId },
       );
       // Fold the human-facing title into the staged payload so approval can mint

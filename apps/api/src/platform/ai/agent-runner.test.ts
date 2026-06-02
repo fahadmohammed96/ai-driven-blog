@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { AgentRunner, type RunContext } from "./agent-runner";
 import { AgentRegistry, type AgentDefinition } from "./agent-registry";
 import { ToolRegistry } from "./tool-registry";
-import { StubLlmAdapter, type LlmPort } from "./llm";
+import { StubLlmAdapter, type LlmPort, type Message } from "./llm";
 import type { SchemaLike, ToolDefinition } from "./tools";
 import type {
   AgentRunStore,
@@ -273,6 +273,79 @@ describe("AgentRunner — generic ReAct loop", () => {
     expect(gate).toHaveBeenCalledTimes(2);
     expect(llm.calls).toBe(2); // one rejection + one acceptance, never more
     expect(proposal.truncated).toBe(false);
+    expect(proposal.payload).toBe(STUB_DRAFT);
+  });
+
+  it("dispatch enforcement: a tool_use for a registered-but-NOT-allowed tool is refused, never executed (FIX 3)", async () => {
+    const { tool, calls } = makeDummyTool();
+    // `dummy` is REGISTERED in the registry but the agent does NOT allow-list it.
+    const tools = new ToolRegistry([tool]);
+    const transcripts: Message[][] = [];
+    let llmCalls = 0;
+    // A model that (by hallucination / prompt-injection) emits a tool_use for the
+    // un-offered `dummy` on step 1, then finishes once it sees the denial result.
+    const injectingLlm: LlmPort = {
+      complete: async (req) => {
+        llmCalls++;
+        transcripts.push(req.messages);
+        if (!req.messages.some((m) => m.role === "tool_result")) {
+          return {
+            content: "",
+            toolCalls: [{ id: "x1", name: "dummy", input: { q: "ping" } }],
+            stopReason: "tool_use" as const,
+            usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 },
+          };
+        }
+        return {
+          content: STUB_DRAFT,
+          stopReason: "end_turn" as const,
+          usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 },
+        };
+      },
+    };
+    const store = new FakeStore();
+    const proposal = await new AgentRunner({
+      llm: injectingLlm,
+      tools,
+      store,
+      budget: okBudget,
+    }).run(
+      stubAgent({ allowedTools: [] }),
+      { subjectId: "denytool", content: "scrivi" },
+      ctx(),
+    );
+
+    // THE enforcement: the not-allowed tool's accessor was NEVER invoked.
+    expect(calls()).toBe(0);
+    // The loop self-corrected (saw the denial result) and terminated with a valid
+    // payload — no throw, no hang.
+    expect(llmCalls).toBe(2);
+    expect(proposal.payload).toBe(STUB_DRAFT);
+    expect(proposal.status).toBe("pending");
+    // The denied call IS recorded for audit/provenance even though it was refused.
+    expect(store.rows[0]!.toolCalls.some((c) => c.name === "dummy")).toBe(true);
+    // A synthetic error tool_result for the denied call re-entered the transcript.
+    const denialResult = transcripts[1]!.find(
+      (m) => m.role === "tool_result" && m.toolName === "dummy",
+    );
+    expect(denialResult).toBeTruthy();
+    expect((denialResult as { content: string }).content).toMatch(/not permitted/);
+  });
+
+  it("an ALLOWED, advertised tool still dispatches normally (FIX 3 regression)", async () => {
+    const { tool, calls } = makeDummyTool();
+    const tools = new ToolRegistry([tool]);
+    const llm = new CountingLlm(new StubLlmAdapter({ scenario: "one-tool-then-end" }));
+    const store = new FakeStore();
+
+    const proposal = await runner(llm, store, tools).run(
+      stubAgent({ allowedTools: ["dummy"] }),
+      { subjectId: "allowtool", content: "scrivi" },
+      ctx(),
+    );
+
+    // The advertised + allow-listed tool runs exactly as before the enforcement.
+    expect(calls()).toBe(1);
     expect(proposal.payload).toBe(STUB_DRAFT);
   });
 

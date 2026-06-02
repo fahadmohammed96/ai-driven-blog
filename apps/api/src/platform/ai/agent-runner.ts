@@ -5,7 +5,7 @@ import type { BudgetGuard } from "./budget-guard";
 import type { LlmPort, LlmRequest } from "./llm";
 import type { CacheableBlock, Message, ToolCall, ToolContext } from "./tools";
 import { type AgentDefinition, hashAgentDefinition } from "./agent-registry";
-import type { ToolRegistry } from "./tool-registry";
+import type { DispatchResult, ToolRegistry } from "./tool-registry";
 import type { AgentRunStore, RunEnvelope } from "./agent-run-store";
 
 /**
@@ -155,8 +155,28 @@ export class AgentRunner {
 
       if (resp.stopReason === "tool_use") {
         const calls = resp.toolCalls ?? [];
+        // Record EVERY requested call for audit/provenance, but DISPATCH only the
+        // ones in `def.allowedTools` — `allowedTools` is now ENFORCED at dispatch,
+        // not merely advertised (FIX 3, defence in depth for all agents). A model
+        // that (by hallucination or prompt-injection) emits a call to a tool that
+        // is registered but NOT offered on this run — e.g. the Researcher's opt-out
+        // `searchSources` with the flag OFF — is refused with a synthetic error
+        // result instead of executed. The error result keeps the ReAct loop
+        // self-correcting and terminating (the model sees the denial and moves on).
         usedTools.push(...calls);
-        const results = await this.deps.tools.dispatch(calls, toolCtx);
+        const allowed = new Set(def.allowedTools);
+        const permitted = calls.filter((c) => allowed.has(c.name));
+        const denied = calls.filter((c) => !allowed.has(c.name));
+        const results: DispatchResult[] = [
+          ...(await this.deps.tools.dispatch(permitted, toolCtx)),
+          ...denied.map((c) => ({
+            toolCallId: c.id,
+            toolName: c.name,
+            content: `error: tool '${c.name}' not permitted`,
+            final: false,
+            isError: true,
+          })),
+        ];
         messages.push({ role: "assistant", content: resp.content });
         for (const r of results) {
           messages.push({

@@ -19,10 +19,18 @@ import { z } from "zod";
  * `searchSources` boundary tool is never reachable.
  */
 
-/** A web source the Researcher surfaced. `url` is validated (output-safety). */
+/**
+ * A web source the Researcher surfaced. `url` is validated AND scheme-guarded to
+ * http(s) (output-safety): `z.string().url()` alone accepts `javascript:`/`data:`
+ * URLs (the URL constructor does), and the url flows into an `<a href>` on the
+ * proposals card — the same XSS sink the S3 email fix closed with `safeHref`.
+ */
 export const researchSourceSchema = z.object({
   title: z.string(),
-  url: z.string().url(),
+  url: z
+    .string()
+    .url()
+    .refine((u) => /^https?:\/\//i.test(u), { message: "only http(s) URLs" }),
 });
 export type ResearchSource = z.infer<typeof researchSourceSchema>;
 

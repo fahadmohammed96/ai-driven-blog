@@ -249,6 +249,30 @@ describe("agent-proposals HTTP (Slice T1)", () => {
     });
   }
 
+  async function runIdOf(id: string): Promise<string | null> {
+    return withTenant(db, TENANT, async (tx) => {
+      const rows = await tx
+        .select({ runId: agentProposals.runId })
+        .from(agentProposals)
+        .where(eq(agentProposals.id, id));
+      return rows[0]?.runId ?? null;
+    });
+  }
+
+  async function setExternalResearch(enabled: boolean): Promise<void> {
+    await withTenant(db, TENANT, (tx) =>
+      upsertTenantSettings(tx, TENANT, withSettingsDefaults({ externalResearch: { enabled } })),
+    );
+  }
+
+  async function generate(brief: string): Promise<{ id: string }> {
+    const res = await request(app.getHttpServer())
+      .post("/agent-proposals/generate")
+      .send({ brief })
+      .expect(201);
+    return { id: res.body.id as string };
+  }
+
   it("flag ON → the staged Writer proposal carries a populated research_context", async () => {
     await withTenant(db, TENANT, (tx) =>
       upsertTenantSettings(tx, TENANT, withSettingsDefaults({ externalResearch: { enabled: true } })),
@@ -276,5 +300,39 @@ describe("agent-proposals HTTP (Slice T1)", () => {
       .expect(201);
 
     expect(await researchContextOf(res.body.id)).toBeNull();
+  });
+
+  // FIX 1 (X1 review — Writer idempotency must fold the research dimension): same
+  // brief, same day, flag flipped OFF→ON must mint a NEW, ENRICHED Writer run — NOT
+  // replay the stale flag-OFF proposal. With the bug the Writer's subjectId defaults
+  // to the brief, so the flag-ON run shares the flag-OFF taskId and replays the
+  // un-enriched proposal: the tenant pays the Researcher but the enriched draft is
+  // discarded (idempotency-replay class, lezioni S1/S2).
+  it("flag flip OFF→ON for the SAME brief/day mints a new enriched run, never a stale replay", async () => {
+    const brief = "Idempotenza ricerca: un weekend a Nara";
+
+    await setExternalResearch(false);
+    const a = await generate(brief);
+    expect(await researchContextOf(a.id)).toBeNull();
+    const runA = await runIdOf(a.id);
+
+    // Same brief, same UTC day, flag now ON.
+    await setExternalResearch(true);
+    const b = await generate(brief);
+    // A genuinely NEW proposal (not the flag-OFF one replayed).
+    expect(b.id).not.toBe(a.id);
+    // It carries the Researcher's brief — the enrichment was kept, not discarded.
+    const rcB = await researchContextOf(b.id);
+    expect(rcB).not.toBeNull();
+    // THE discriminator: B belongs to a DIFFERENT run than A. With the bug the
+    // research dimension is absent from the Writer's taskId, so B replays A's run
+    // and the two share one run_id.
+    const runB = await runIdOf(b.id);
+    expect(runB).not.toBe(runA);
+
+    // Sanity: dedup is still active — a second generate at CONSTANT flag/brief/day
+    // replays the same run (no third Writer run is paid for).
+    const b2 = await generate(brief);
+    expect(await runIdOf(b2.id)).toBe(runB);
   });
 });

@@ -46,8 +46,12 @@ import {
  * topic (+ stub `searchSources`) always yields the same brief (replay-stable).
  *
  * COST-ZERO INVARIANT: with `externalEnabled=false` the `searchSources`
- * (`side:'external'`) tool is NOT offered AND not pre-called, so no external
- * source is reachable and the accessor is never invoked (zero external calls).
+ * (`side:'external'`) tool is left OUT of `allowedTools`, so it is NOT advertised
+ * AND not pre-called. The invariant is STRUCTURAL, not just advertised: the
+ * `AgentRunner` now ENFORCES `allowedTools` at DISPATCH (FIX 3), so even a model
+ * that hallucinates (or is prompt-injected into) a `searchSources` call has it
+ * REFUSED rather than executed — the accessor is never invoked (zero external
+ * calls), not merely "not suggested".
  */
 
 export const RESEARCHER_PROPOSAL_TYPE = "research_brief";
