@@ -161,7 +161,7 @@ export class InboundAgent {
     //    classification — even from a prose stub.
     const classification = classifyInbound(input.message);
     const voice: BrandVoice = await this.accessors.brandVoice(ctx.tenantId);
-    const seedReply = buildSeedReply(classification, voice.tone);
+    const seedReply = buildSeedReply(classification);
     const leadQualification = qualifyLead(classification, input.message, input.leadId);
     const nextAction = suggestNextAction(classification);
     const rationale =
@@ -200,9 +200,10 @@ export class InboundAgent {
     const llm = await this.resolveLlm(ctx.tenantId);
     const runner = new AgentRunner({ llm, tools: registry, ...this.runnerDeps });
     // `subjectId` (idempotency) folds EVERY input that shapes the output: tenant,
-    // the message AND the leadId — so a re-run with a different message/lead is NOT
-    // a replay of the wrong classification (lezioni S1/S2/X1-F1).
-    const subjectId = `${ctx.tenantId}|msg:${input.message}|lead:${input.leadId ?? ""}`;
+    // the message, the leadId AND the brand-voice tone — so a re-run with a
+    // different message/lead/tone is NOT a replay of a stale reply (lezioni
+    // S1/S2/X1-F1, O1-topLimit; tone shapes the reply via the LLM refinement).
+    const subjectId = `${ctx.tenantId}|msg:${input.message}|lead:${input.leadId ?? ""}|tone:${voice.tone}`;
     const agentInput: AgentInput = {
       subjectId,
       content: JSON.stringify({ message: input.message, classification, leadId: input.leadId }),

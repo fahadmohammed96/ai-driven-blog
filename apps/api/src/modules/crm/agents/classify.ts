@@ -35,7 +35,6 @@ const RECLAMO_MARKERS = [
 const LEAD_MARKERS = [
   "preventivo",
   "prenot",
-  "vorrei",
   "viaggio",
   "quanto cost",
   "disponibil",
@@ -102,21 +101,19 @@ export function suggestNextAction(classification: InboundClassification): string
 }
 
 /**
- * A courteous seed reply in the tenant's tone, per classification. The LLM step
- * may refine the wording, but this is always a valid, on-brand fallback (so even
- * the offline prose stub yields a complete, sendable-by-a-human draft).
+ * A courteous, on-brand seed reply per classification. The LLM step may refine
+ * the wording in the tenant's tone, but this is always a valid fallback (so even
+ * the offline prose stub yields a complete, sendable-by-a-human draft). It carries
+ * NO meta-prefix: the tone shapes the LLM refinement, never the customer copy
+ * verbatim (O2-CLS-1 — a "Con tono <tone>:" opener would leak a meta-instruction).
  */
-export function buildSeedReply(
-  classification: InboundClassification,
-  tone: string,
-): string {
-  const opener = tone.trim() ? `Con tono ${tone.trim()}: ` : "";
+export function buildSeedReply(classification: InboundClassification): string {
   switch (classification) {
     case "lead":
-      return `${opener}Grazie per averci scritto! Saremo felici di aiutarti a organizzare il tuo viaggio. Per prepararti una proposta su misura ci servono ancora un paio di dettagli (date, durata, preferenze).`;
+      return "Grazie per averci scritto! Saremo felici di aiutarti a organizzare il tuo viaggio. Per prepararti una proposta su misura ci servono ancora un paio di dettagli (date, durata, preferenze).";
     case "reclamo":
-      return `${opener}Ci dispiace molto per il disagio: prendiamo la tua segnalazione molto sul serio. Vogliamo capire cosa è successo e trovare insieme una soluzione il prima possibile.`;
+      return "Ci dispiace molto per il disagio: prendiamo la tua segnalazione molto sul serio. Vogliamo capire cosa è successo e trovare insieme una soluzione il prima possibile.";
     case "info":
-      return `${opener}Grazie per il tuo messaggio! Ecco le informazioni che ci hai chiesto; resta a disposizione per qualsiasi altra domanda.`;
+      return "Grazie per il tuo messaggio! Ecco le informazioni che ci hai chiesto; resta a disposizione per qualsiasi altra domanda.";
   }
 }

@@ -13,10 +13,10 @@ import type { AgentRunStore, AgentRunRecord } from "../../../platform/ai/agent-r
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const VOICE: BrandVoice = { tone: "caldo", audience: "viaggiatori" };
 
-function fakeAccessors(): InboundAccessors {
+function fakeAccessors(tone = VOICE.tone): InboundAccessors {
   return {
     leads: async () => [],
-    brandVoice: async () => VOICE,
+    brandVoice: async () => ({ ...VOICE, tone }),
     rag: { embed: async () => [0], retrieve: async () => [] },
   };
 }
@@ -76,6 +76,12 @@ describe("classifyInbound (deterministic heuristic)", () => {
 
   it("a complaint takes precedence over a trip mention → reclamo", () => {
     expect(classifyInbound("Voglio un rimborso, il viaggio è stato pessimo")).toBe("reclamo");
+  });
+
+  it("a courteous 'vorrei' opener without a buying signal stays info (O2-CLS-2)", () => {
+    expect(classifyInbound("Vorrei sapere se siete aperti il sabato")).toBe("info");
+    // A real buying signal still wins: "vorrei" + "preventivo" → lead.
+    expect(classifyInbound("Vorrei un preventivo per le Dolomiti")).toBe("lead");
   });
 
   it("is stable across calls (same input → same classification)", () => {
@@ -150,6 +156,29 @@ describe("InboundAgent.run", () => {
       { tenantId: TENANT },
     );
     expect(info.model).toBe("fast");
+  });
+
+  it("the seed reply carries NO meta-prefix (no 'Con tono …:' leak to the customer) (O2-CLS-1)", async () => {
+    // A prose stub falls back to the deterministic seed verbatim; the tenant tone
+    // is non-empty, so the old "Con tono caldo: " opener would have leaked.
+    const agent = new InboundAgent({ llm: new StubLlmAdapter(), accessors: fakeAccessors("caldo") });
+    const { payload } = await agent.run({ message: "Vorrei un preventivo" }, { tenantId: TENANT });
+    expect(payload.proposedReply).not.toContain("Con tono");
+    expect(payload.proposedReply.length).toBeGreaterThan(0);
+  });
+
+  it("a DIFFERENT brand-voice tone is NOT a replay (tone folds into the subject) (O2-BVI-1)", async () => {
+    const store = memStore();
+    const triggeredAt = new Date("2026-06-02T10:00:00.000Z");
+    const mk = (tone: string) =>
+      new InboundAgent({ llm: spyLlm().port, accessors: fakeAccessors(tone), store });
+    const msg = "Vorrei un preventivo";
+    const warm = await mk("caldo").run({ message: msg }, { tenantId: TENANT, triggeredAt });
+    const dry = await mk("formale").run({ message: msg }, { tenantId: TENANT, triggeredAt });
+    expect(dry.id).not.toBe(warm.id);
+    // Same identical input (same tone) → stable id (still idempotent).
+    const warm2 = await mk("caldo").run({ message: msg }, { tenantId: TENANT, triggeredAt });
+    expect(warm2.id).toBe(warm.id);
   });
 
   it("IDEMPOTENT: same tenant|message|leadId → STABLE proposal id (staging dedup)", async () => {
