@@ -197,7 +197,9 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
                 ? approveAnalystInsight(row)
                 : row.type === "lead_classification"
                   ? approveInboundClassification(row)
-                  : await approveContentDraft(tx, tenantId, row);
+                  : row.type === "editorial_plan"
+                    ? approveEditorialPlan(row)
+                    : await approveContentDraft(tx, tenantId, row);
       await tx
         .update(agentProposals)
         .set({ status: "approved", reviewedAt: sql`now()` })
@@ -334,6 +336,23 @@ function approveAnalystInsight(
  * OUT of the `content_draft` default that would crash on it (Slice O2 design crux).
  */
 function approveInboundClassification(
+  row: typeof agentProposals.$inferSelect,
+): AcknowledgedProposal {
+  return { id: row.id, status: "approved" };
+}
+
+/**
+ * `editorial_plan` gate (Editorial Orchestrator, Slice O3): ACKNOWLEDGE-ONLY. An
+ * EditorialPlan is a PLAN — slots/priorities/notes for the founder — not an
+ * action. Approving it = the founder RECOGNISES the plan: there is NO content
+ * mint, NO publication transition, NO auto-dispatch of the plan's slots (the
+ * per-slot autonomy engine is the future — DEBT-041; today the Orchestrator only
+ * proposes). The outer `approve` flips `status:'approved'` after this branch;
+ * here we only echo the proposal's id + that resulting status. This is also the
+ * guard that keeps the `EditorialPlan` payload (which has no `draft`) OUT of the
+ * `content_draft` default that would crash on it (Slice O3 design crux).
+ */
+function approveEditorialPlan(
   row: typeof agentProposals.$inferSelect,
 ): AcknowledgedProposal {
   return { id: row.id, status: "approved" };

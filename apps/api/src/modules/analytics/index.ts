@@ -19,3 +19,12 @@ export {
   lastIngestedAt,
   type MetricSnapshotRow,
 } from "./analytics.repo";
+// Exported so the composition root (the Orchestrator controller, Slice O3) can
+// bind the Analyst as one of the Orchestrator's sub-agents via the public barrel.
+export {
+  AnalystAgent,
+  type AnalystAccessors,
+  type AnalystAgentDeps,
+  type AnalystRunInput,
+  type AnalystMode,
+} from "./agents/analyst-agent";

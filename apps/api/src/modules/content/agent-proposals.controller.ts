@@ -284,7 +284,9 @@ function toView(p: StagedProposal): ProposalView {
       ? "Report performance"
       : p.type === "lead_classification"
         ? "Classificazione inbound"
-        : "Bozza AI";
+        : p.type === "editorial_plan"
+          ? "Piano editoriale"
+          : "Bozza AI";
   return {
     id: p.id,
     agentName: p.agentName,
