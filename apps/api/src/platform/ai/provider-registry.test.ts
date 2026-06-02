@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { ProviderRegistry, LLM_ANTHROPIC_CONNECTOR } from "./provider-registry";
+import {
+  ProviderRegistry,
+  LLM_ANTHROPIC_CONNECTOR,
+  createProviderRegistryFromEnv,
+} from "./provider-registry";
 import { StubLlmAdapter, type LlmRequest, type LlmResponse } from "./llm";
 import { InMemoryCredentialStore, type CredentialStore } from "../integration";
+import type { Db } from "../db/client";
 import type { MeteringService } from "./metering";
 import type { BudgetGuard } from "./budget-guard";
 
@@ -92,5 +97,34 @@ describe("ProviderRegistry (per-tenant BYOK)", () => {
     // The metered decorator ran budget.check (pre) and metering.record (post).
     expect(checks).toEqual([TENANT]);
     expect(records).toEqual([TENANT]);
+  });
+});
+
+describe("createProviderRegistryFromEnv (DEBT-023 live wiring)", () => {
+  it("boots keyless: no CONNECTOR_SECRET_KEY → platform fallback, DB never touched", async () => {
+    const prevSecret = process.env.CONNECTOR_SECRET_KEY;
+    const prevApiKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.CONNECTOR_SECRET_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      // A DB that throws on ANY access proves the keyless path never queries it.
+      const db = new Proxy(
+        {},
+        {
+          get() {
+            throw new Error("DB must not be touched without a master secret");
+          },
+        },
+      ) as unknown as Db;
+
+      const registry = createProviderRegistryFromEnv(db);
+      const port = await registry.getClient(TENANT);
+
+      // No tenant key + no platform key → the zero-cost stub. CI stays free.
+      expect(port).toBeInstanceOf(StubLlmAdapter);
+    } finally {
+      if (prevSecret !== undefined) process.env.CONNECTOR_SECRET_KEY = prevSecret;
+      if (prevApiKey !== undefined) process.env.ANTHROPIC_API_KEY = prevApiKey;
+    }
   });
 });

@@ -276,9 +276,12 @@ export class MeteredLlmAdapter implements LlmPort {
  * metering deps are supplied the port is composed as `metered(anthropic|stub)`
  * (Slice R1-B); with no deps it returns the bare port (no DB to meter against —
  * e.g. the arch test / unit contexts).
- * TODO(debt): DEBT-019 — production callers don't compose the metered port yet;
- * the AgentRunner (A1-core) wires `metered(provider(tenant))` with budget from
- * `getTenantSettings`.
+ * The agentic controllers now compose `metered(provider(tenant))` via
+ * `createProviderRegistryFromEnv` (DEBT-023/025), so this factory is the platform
+ * fallback INSIDE the registry, not the production entrypoint.
+ * TODO(debt): DEBT-019 — the remaining part is the DB FK
+ * `ai_usage_events.run_id → ai_agent_runs.id`, which needs the run row
+ * pre-inserted as `pending` first (DEBT-021).
  */
 export function createLlmPortFromEnv(deps?: {
   metering: MeteringService;

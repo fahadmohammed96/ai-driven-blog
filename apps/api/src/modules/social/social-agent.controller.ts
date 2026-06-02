@@ -13,7 +13,7 @@ import { channelSchema, type Channel } from "@blogs/contracts";
 import { DB, LLM } from "../../platform/tokens";
 import type { Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
-import { createLlmPortFromEnv } from "../../platform/ai/llm";
+import { createProviderRegistryFromEnv } from "../../platform/ai/provider-registry";
 import { PostgresMeteringService } from "../../platform/ai/metering";
 import { TwoLevelBudgetGuard, BudgetExceededError } from "../../platform/ai/budget-guard";
 import { PostgresAgentRunStore } from "../../platform/ai/agent-run-store";
@@ -55,9 +55,11 @@ export class SocialAgentController {
       resolveBudgetUsd: (tenantId) =>
         withTenant(db, tenantId, (tx) => getTenantSettings(tx)).then((s) => s.budgetUsdMonthly),
     });
-    const llm = createLlmPortFromEnv({ metering, budget });
+    // BYOK-aware metered port source (DEBT-023/025): per-tenant key → platform key
+    // → zero-cost stub (CI/E2E). Same metered composition, now tenant-aware.
+    const provider = createProviderRegistryFromEnv(db, { metering, budget });
     this.agent = new SocialAgent({
-      llm,
+      provider,
       accessors: { brandContext: makeBrandContextAccessor(db) },
       store: new PostgresAgentRunStore(db),
       budget,

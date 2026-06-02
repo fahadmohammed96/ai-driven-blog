@@ -1,7 +1,9 @@
-import type { CredentialStore } from "../integration";
+import type { Db } from "../db/client";
+import { DbCredentialStore, type CredentialStore } from "../integration";
 import {
   AnthropicLlmAdapter,
   MeteredLlmAdapter,
+  StubLlmAdapter,
   createLlmPortFromEnv,
   type LlmPort,
 } from "./llm";
@@ -86,4 +88,43 @@ export class ProviderRegistry {
       ? new MeteredLlmAdapter(base, { metering: this.metering, budget: this.budget })
       : base;
   }
+}
+
+/** A keyless store: routes every tenant to the platform fallback (no BYOK). */
+const NULL_CREDENTIAL_STORE: CredentialStore = {
+  load: async () => null,
+  save: async () => {},
+};
+
+/**
+ * Build the live agentic ProviderRegistry from env (DEBT-023(b)/025(a)). With
+ * `CONNECTOR_SECRET_KEY` set, a per-tenant Anthropic key sealed in
+ * `connector_credentials` is decrypted and used (`DbCredentialStore`); otherwise —
+ * and in keyless CI/E2E — every tenant falls back to the platform key (the
+ * zero-cost stub when `ANTHROPIC_API_KEY` is also absent). The stack BOOTS without
+ * the master secret (DO NO HARM): the null store simply yields the platform port.
+ * Supplying `metering`+`budget` wraps every resolved port with the R1-B cost
+ * controls — so the agentic controllers compose the SAME `metered(...)` they had
+ * with `createLlmPortFromEnv`, now per-tenant BYOK-aware.
+ */
+export function createProviderRegistryFromEnv(
+  db: Db,
+  deps?: { metering?: MeteringService; budget?: BudgetGuard },
+): ProviderRegistry {
+  const secret = process.env.CONNECTOR_SECRET_KEY;
+  const store: CredentialStore = secret
+    ? new DbCredentialStore(db, secret)
+    : NULL_CREDENTIAL_STORE;
+  // Offline guard (zero-cost invariant): with NO platform key (CI/E2E/dev) we must
+  // never open a network connection — not even for a STORED tenant key, which in
+  // those environments is a test fixture, not a real credential. So when
+  // ANTHROPIC_API_KEY is absent, BYOK keys ALSO resolve to the stub. In prod the
+  // platform key is set, so a real per-tenant key builds the real Anthropic port.
+  const offline = !process.env.ANTHROPIC_API_KEY;
+  return new ProviderRegistry({
+    store,
+    ...(offline ? { anthropicFactory: () => new StubLlmAdapter() } : {}),
+    ...(deps?.metering ? { metering: deps.metering } : {}),
+    ...(deps?.budget ? { budget: deps.budget } : {}),
+  });
 }

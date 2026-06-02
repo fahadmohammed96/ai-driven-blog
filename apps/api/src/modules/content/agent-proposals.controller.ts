@@ -15,7 +15,7 @@ import type { Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
 import { HashingEmbedder } from "../../platform/ai/embedder";
 import { retrieveSimilar } from "../../platform/ai/rag";
-import { createLlmPortFromEnv } from "../../platform/ai/llm";
+import { createProviderRegistryFromEnv } from "../../platform/ai/provider-registry";
 import { PostgresMeteringService } from "../../platform/ai/metering";
 import { TwoLevelBudgetGuard, BudgetExceededError } from "../../platform/ai/budget-guard";
 import { PostgresAgentRunStore } from "../../platform/ai/agent-run-store";
@@ -92,12 +92,17 @@ export class AgentProposalsController {
       resolveBudgetUsd: (tenantId) =>
         withTenant(db, tenantId, (tx) => getTenantSettings(tx)).then((s) => s.budgetUsdMonthly),
     });
-    // Metered port: budget pre-check + synchronous spend recording around every
-    // round-trip. Stub (zero-cost) when ANTHROPIC_API_KEY is absent (CI/E2E).
-    const llm = createLlmPortFromEnv({ metering: this.metering, budget: this.budget });
+    // BYOK-aware metered LlmPort source (DEBT-023/025): the per-tenant Anthropic
+    // key when present, else the platform key — and the zero-cost stub when there
+    // is no key at all (CI/E2E). Budget pre-check + synchronous metering wrap every
+    // round-trip, exactly as the previous createLlmPortFromEnv composition did.
+    const provider = createProviderRegistryFromEnv(db, {
+      metering: this.metering,
+      budget: this.budget,
+    });
     const embedder = new HashingEmbedder();
     this.writer = new WriterAgent({
-      llm,
+      provider,
       accessors: {
         embed: (text) => embedder.embed(text),
         retrieve: (tenantId, embedding, k) => retrieveSimilar(db, tenantId, embedding, k),

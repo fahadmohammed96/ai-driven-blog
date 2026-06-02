@@ -9,7 +9,11 @@ import {
 import { Pool } from "pg";
 import { createDb, type Db } from "../db/client";
 import { DbCredentialStore } from "../integration";
-import { ProviderRegistry, LLM_ANTHROPIC_CONNECTOR } from "./provider-registry";
+import {
+  ProviderRegistry,
+  LLM_ANTHROPIC_CONNECTOR,
+  createProviderRegistryFromEnv,
+} from "./provider-registry";
 import { StubLlmAdapter } from "./llm";
 
 /**
@@ -117,5 +121,25 @@ describe("ProviderRegistry over connector_credentials (encrypted, RLS-scoped)", 
 
     // B has no credential of its own → platform key, never A's.
     expect(await registry.getClient(TENANT_B)).toBe(platform);
+  });
+
+  it("createProviderRegistryFromEnv: offline (no ANTHROPIC_API_KEY) stubs even a STORED tenant key", async () => {
+    // Regression for the e2e break: a fixture BYOK key in the dev DB must NOT make
+    // the live wiring open a real Anthropic connection when the platform is offline.
+    await seedTenantKey(TENANT_A, "sk-fixture-never-called");
+    const prevSecret = process.env.CONNECTOR_SECRET_KEY;
+    const prevApiKey = process.env.ANTHROPIC_API_KEY;
+    process.env.CONNECTOR_SECRET_KEY = MASTER;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const registry = createProviderRegistryFromEnv(db);
+      const port = await registry.getClient(TENANT_A);
+      // Stored key resolves to the stub offline → zero-cost, no network call.
+      expect(port).toBeInstanceOf(StubLlmAdapter);
+    } finally {
+      if (prevSecret !== undefined) process.env.CONNECTOR_SECRET_KEY = prevSecret;
+      else delete process.env.CONNECTOR_SECRET_KEY;
+      if (prevApiKey !== undefined) process.env.ANTHROPIC_API_KEY = prevApiKey;
+    }
   });
 });
