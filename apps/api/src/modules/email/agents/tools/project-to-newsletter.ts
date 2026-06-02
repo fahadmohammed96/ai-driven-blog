@@ -2,6 +2,7 @@ import type { Block, EmailDraft, Theme } from "@blogs/contracts";
 import { emailDraftSchema } from "@blogs/contracts";
 import type { ToolDefinition } from "../../../../platform/ai/tools";
 import { schema, isObject } from "./schema";
+import { escapeHtml } from "../../html";
 
 /**
  * `projectToNewsletter` — the DETERMINISTIC article → newsletter projector
@@ -27,14 +28,6 @@ export interface NewsletterSource {
   blocks: Block[];
   /** Canonical published URL — the CTA target. */
   link?: string;
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 /** Plain-text paragraphs of the article (for the preheader + brand-voice scoring). */

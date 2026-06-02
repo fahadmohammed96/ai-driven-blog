@@ -21,3 +21,4 @@ export {
   sendNewsletterToSegment,
   type SendNewsletterInput,
 } from "./newsletter";
+export { makeEmailDraftSink } from "./email-draft-sink";

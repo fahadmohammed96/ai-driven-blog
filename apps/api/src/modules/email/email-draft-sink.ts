@@ -3,6 +3,7 @@ import type { EmailDraftSink } from "../content";
 import type { Db } from "../../platform/db/client";
 import type { EmailPort } from "./email.port";
 import { sendNewsletterToSegment } from "./newsletter";
+import { escapeHtml, safeHref } from "./html";
 
 /**
  * The `email_draft` gate sink (Slice S3), wired by the email module and INJECTED
@@ -13,10 +14,16 @@ import { sendNewsletterToSegment } from "./newsletter";
  * subscribers of the draft's theme receive it. Nothing is sent before approval.
  */
 
-/** Compose the draft's HTML body + CTA (the preheader is a hidden preview snippet). */
-function composeHtml(draft: EmailDraft): string {
-  const preview = `<span style="display:none">${draft.preheader}</span>`;
-  const cta = `<p><a href="${draft.ctaUrl}">${draft.ctaText}</a></p>`;
+/**
+ * Compose the draft's HTML body + CTA (the preheader is a hidden preview snippet).
+ * Every agent/LLM-shaped field is escaped before it reaches the subscriber's inbox
+ * (S3 review #1): `preheader`/`ctaText` are HTML-escaped and `ctaUrl` is scheme-
+ * guarded + escaped (`safeHref`). `body` is intentionally left verbatim — it is
+ * the deterministic projection already escaped by `blocksToHtml`.
+ */
+export function composeHtml(draft: EmailDraft): string {
+  const preview = `<span style="display:none">${escapeHtml(draft.preheader)}</span>`;
+  const cta = `<p><a href="${safeHref(draft.ctaUrl)}">${escapeHtml(draft.ctaText)}</a></p>`;
   return `${preview}\n${draft.body}\n${cta}`;
 }
 

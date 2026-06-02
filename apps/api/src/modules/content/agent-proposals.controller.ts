@@ -10,7 +10,7 @@ import {
   Param,
   Post,
 } from "@nestjs/common";
-import { DB, LLM } from "../../platform/tokens";
+import { DB, LLM, EMAIL_DRAFT_SINK } from "../../platform/tokens";
 import type { Db } from "../../platform/db/client";
 import { withTenant } from "../../platform/db/tenant";
 import { HashingEmbedder } from "../../platform/ai/embedder";
@@ -29,6 +29,7 @@ import {
   PostgresAgentProposalStore,
   ProposalNotFoundError,
   ProposalNotPendingError,
+  type EmailDraftSink,
   type StagedProposal,
 } from "./agent-proposal-store";
 
@@ -78,9 +79,13 @@ export class AgentProposalsController {
     // The legacy LLM token is injected only to keep DI order stable; the agentic
     // path builds its own metered LlmPort below.
     @Inject(LLM) _legacyLlm: unknown,
+    // The email_draft gate sink (built in InfraModule), so approving an email
+    // proposal from the unified queue sends to the segment — without this module
+    // importing modules/email. Other proposal types have no external sink.
+    @Inject(EMAIL_DRAFT_SINK) emailSink: EmailDraftSink,
     private readonly tenancy: TenancyService,
   ) {
-    this.proposals = new PostgresAgentProposalStore(db);
+    this.proposals = new PostgresAgentProposalStore(db, { emailSink });
     this.metering = new PostgresMeteringService(db);
     this.budget = new TwoLevelBudgetGuard({
       metering: this.metering,

@@ -1,9 +1,9 @@
 import { Global, Module } from "@nestjs/common";
-import { DB, STORAGE, LLM, EMAIL, PAYMENT, NOTIFICATION } from "./platform/tokens";
-import { createDb } from "./platform/db/client";
+import { DB, STORAGE, LLM, EMAIL, EMAIL_DRAFT_SINK, PAYMENT, NOTIFICATION } from "./platform/tokens";
+import { createDb, type Db } from "./platform/db/client";
 import { createLlmFromEnv } from "./platform/ai/llm";
 import { S3Storage } from "./modules/media";
-import { createEmailFromEnv } from "./modules/email";
+import { createEmailFromEnv, makeEmailDraftSink, type EmailPort } from "./modules/email";
 import { createPaymentFromEnv } from "./modules/commerce";
 import { createNotificationFromEnv } from "./modules/crm";
 
@@ -24,6 +24,12 @@ function storageConfig() {
   };
 }
 
+/** Base URL of the unsubscribe endpoint (per-subscriber token appended on send). */
+function unsubscribeBaseUrl(): string {
+  const root = (process.env.PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  return `${root}/newsletter/unsubscribe`;
+}
+
 /**
  * Shared runtime adapters (DB/object-storage/LLM) built from env, exposed
  * globally as DI tokens so controllers compose the functional core without
@@ -39,9 +45,18 @@ function storageConfig() {
     // yet, so BYOK is inactive on the travel `generateDraft` path.
     { provide: LLM, useFactory: createLlmFromEnv },
     { provide: EMAIL, useFactory: createEmailFromEnv },
+    // The `email_draft` gate sink, built from the shared DB + EMAIL adapters and
+    // exposed as a token so the unified `/agent-proposals` controller can approve
+    // an email draft without `modules/content` importing `modules/email`.
+    {
+      provide: EMAIL_DRAFT_SINK,
+      useFactory: (db: Db, email: EmailPort) =>
+        makeEmailDraftSink({ db, email, unsubscribeBaseUrl: unsubscribeBaseUrl() }),
+      inject: [DB, EMAIL],
+    },
     { provide: PAYMENT, useFactory: createPaymentFromEnv },
     { provide: NOTIFICATION, useFactory: createNotificationFromEnv },
   ],
-  exports: [DB, STORAGE, LLM, EMAIL, PAYMENT, NOTIFICATION],
+  exports: [DB, STORAGE, LLM, EMAIL, EMAIL_DRAFT_SINK, PAYMENT, NOTIFICATION],
 })
 export class InfraModule {}

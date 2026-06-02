@@ -255,12 +255,21 @@ async function approveSocialCaptions(
  * `email_draft` gate (Email Agent, Slice S3): the approval IS the send gate. The
  * approved draft is sent to its theme's confirmed-opt-in segment via the INJECTED
  * `EmailDraftSink` (reuses `sendNewsletterToSegment` in `modules/email`); nothing
- * was sent before this human approval (the propose-only invariant). IDEMPOTENT:
- * the outer `approve` only reaches this for a still-`pending` row (`selectPending`
- * throws otherwise) and marks it `approved` AFTER the send returns — so
- * re-approving an already-approved draft never sends a second time. The subject
- * article (status unchanged) is returned so the gate response shape matches the
- * other types; the theme + contentItemId ride in the payload (`EmailDraft`).
+ * was sent before this human approval (the propose-only invariant).
+ *
+ * IDEMPOTENT for re-approval, sequential AND concurrent: the outer `approve` only
+ * reaches this for a still-`pending` row, and `selectPending` now takes a
+ * `FOR UPDATE` lock, so a concurrent approve waits and then sees the row already
+ * `approved` and throws — the send runs exactly once. The subject article is
+ * validated BEFORE the (irreversible) send, so a missing item throws without
+ * having emailed the segment. The article (status unchanged) is returned so the
+ * gate response shape matches the other types; theme + contentItemId ride in the
+ * payload (`EmailDraft`).
+ *
+ * TODO(debt): DEBT-033 — the send still happens INSIDE the approve transaction:
+ * if the status UPDATE fails after the send, the rollback cannot recall the email
+ * and a retry re-sends. The real fix is a post-commit send (commit `approved`
+ * first, then send — the `commerce.payDeposit` pattern); out of scope here.
  */
 async function approveEmailDraft(
   tx: Tx,
@@ -270,13 +279,21 @@ async function approveEmailDraft(
 ): Promise<ContentItemRow> {
   if (!sink) throw new EmailSinkNotConfiguredError();
   const draft = row.payload as EmailDraft;
-  await sink.send(tenantId, draft);
+  // Validate the subject article BEFORE the irreversible send (S3 review #2).
   const item = await getContentItem(tx, draft.contentItemId);
   if (!item) throw new ContentNotFoundError(draft.contentItemId);
+  await sink.send(tenantId, draft);
   return item;
 }
 
-/** Read a proposal that must exist and still be pending (idempotent gate). */
+/**
+ * Read a proposal that must exist and still be pending — the idempotent gate.
+ * `FOR UPDATE` locks the row so concurrent approve/reject of the SAME proposal
+ * serialize: the second waiter re-reads the committed row, sees it is no longer
+ * `pending`, and throws (`ProposalNotPendingError`). This keeps a side-effectful
+ * approve — e.g. an `email_draft` send — from running twice under concurrency.
+ * Requires an open transaction (always true: callers run inside `withTenant`).
+ */
 async function selectPending(
   tx: Tx,
   id: string,
@@ -285,7 +302,7 @@ async function selectPending(
     .select()
     .from(agentProposals)
     .where(eq(agentProposals.id, id))
-    .limit(1);
+    .for("update");
   const row = rows[0];
   if (!row) throw new ProposalNotFoundError(id);
   if (row.status !== "pending") throw new ProposalNotPendingError(id, row.status);

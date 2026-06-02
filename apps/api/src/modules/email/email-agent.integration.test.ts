@@ -16,6 +16,7 @@ import {
   PostgresAgentProposalStore,
   ProposalNotPendingError,
   ProposalNotFoundError,
+  ContentNotFoundError,
 } from "../content";
 import type { EmailMessage, EmailPort } from "./email.port";
 import { insertSubscriber, setSubscriberStatus, addThemes } from "./subscribers.repo";
@@ -191,6 +192,36 @@ describe("email_draft gate (Docker, as app_rw)", () => {
     await expect(
       store.approve(TENANT_B, "cccccccc-cccc-cccc-cccc-cccccccccccc"),
     ).rejects.toBeInstanceOf(ProposalNotFoundError);
+    expect(port.sent).toHaveLength(0);
+  });
+
+  it("validates the target article BEFORE sending — a missing item sends nothing", async () => {
+    // A confirmed 'viaggi' subscriber so the segment is NON-empty: were the send
+    // to run before validation (the S3 #2 bug), this port would record a delivery.
+    await seedConfirmedSubscriber(TENANT_A, "dave@test.dev", "viaggi");
+    const port = new CountingEmailPort();
+    const store = new PostgresAgentProposalStore(appDb, {
+      emailSink: makeEmailDraftSink({
+        db: appDb,
+        email: port,
+        unsubscribeBaseUrl: "https://blog.test/newsletter/unsubscribe",
+      }),
+    });
+    // The draft points at an article that does not exist.
+    await store.persist(
+      proposal({
+        id: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+        payload: emailDraft({
+          contentItemId: "99999999-9999-9999-9999-999999999999",
+          theme: "viaggi",
+        }),
+      }),
+    );
+
+    await expect(
+      store.approve(TENANT_A, "dddddddd-dddd-dddd-dddd-dddddddddddd"),
+    ).rejects.toBeInstanceOf(ContentNotFoundError);
+    // Nothing went out: the item was validated before the irreversible send.
     expect(port.sent).toHaveLength(0);
   });
 });
