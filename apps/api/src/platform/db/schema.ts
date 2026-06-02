@@ -435,9 +435,11 @@ export const aiAgentRuns = pgTable(
     agentDefinitionVersion: text("agent_definition_version").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  // Idempotency anchor: at most one run row per (tenant, task). The runner
+  // Idempotency anchor: at most one run ROW per (tenant, task). The runner
   // checks this key before spending on the LLM; the unique constraint makes a
-  // duplicate physically impossible even under a concurrent retry.
+  // duplicate ROW impossible even under a concurrent retry — it guards the audit
+  // row, NOT the LLM spend (a concurrent pre-write delivery can double-call the
+  // model before either row lands; that pre-insert reservation is DEBT-021).
   (t) => [unique("ai_agent_runs_tenant_task_unique").on(t.tenantId, t.taskId)],
 );
 

@@ -104,7 +104,13 @@ export class BatchWorker {
     });
   }
 
-  /** Fetch a job (incl. `state` and `output`) by id — for result retrieval. */
+  /**
+   * Fetch a job (incl. `state` and `output`) by id — for result retrieval.
+   * NOTE: pg-boss v12 marks `getJobById` `@deprecated` (in favour of `findJobs`),
+   * but it is retained and fully functional (the integration test reads completed
+   * AND failed jobs through it); kept for the single-id ergonomic. Migrate to
+   * `findJobs(name, { id })` if/when a future major removes it.
+   */
   async getJob<T extends object>(name: string, id: string): Promise<Job<T> & { state: string; output: unknown } | null> {
     const job = await this.boss.getJobById<T>(name, id, {});
     return job as (Job<T> & { state: string; output: unknown }) | null;
