@@ -14,7 +14,13 @@
  * envelope, one gate contract, and one audit shape.
  */
 
-export type ProposalStatus = "pending" | "approved" | "rejected" | "modified";
+/**
+ * `invalid` marks a run that finished without a schema-valid payload (a truncated
+ * run whose partial output failed `outputSchema`, DEBT-029). The human gate hides
+ * it (`listPending` shows only `pending`) and refuses approval, so a malformed
+ * payload is never injected downstream — instead of staging a raw, crashing value.
+ */
+export type ProposalStatus = "pending" | "approved" | "rejected" | "modified" | "invalid";
 
 /**
  * The kind of proposal, which selects the human gate it flows into (see the

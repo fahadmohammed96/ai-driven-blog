@@ -19,8 +19,12 @@ import type { ToolCall } from "./tools";
 
 /** The run-result snapshot persisted in `ai_agent_runs.usage_json`. */
 export interface RunEnvelope {
-  /** 'completed' (clean finish) or 'pending' (a truncated, partial run). */
-  status: "completed" | "pending";
+  /**
+   * 'completed' (clean, schema-valid finish), 'pending' (a truncated run whose
+   * partial output still validates → an approvable partial), or 'invalid' (a
+   * truncated run whose output failed the schema → non-approvable, DEBT-029).
+   */
+  status: "completed" | "pending" | "invalid";
   payload: unknown;
   rationale: string;
   estimatedCostUsd: number;

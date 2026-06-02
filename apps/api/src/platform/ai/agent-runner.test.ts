@@ -100,6 +100,17 @@ class CountingLlm implements LlmPort {
   }
 }
 
+/** A port that returns a single `max_tokens`-truncated response with fixed content. */
+function maxTokensLlm(content: string): LlmPort {
+  return {
+    complete: async () => ({
+      content,
+      stopReason: "max_tokens" as const,
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 },
+    }),
+  };
+}
+
 const okBudget: BudgetGuard = { check: async () => {} };
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
@@ -171,7 +182,7 @@ describe("AgentRunner — generic ReAct loop", () => {
     expect(store.rows[0]!.toolCalls[0]!.name).toBe("dummy");
   });
 
-  it("cycle-until-max → MaxSteps reached → truncated partial Proposal", async () => {
+  it("cycle-until-max → maxSteps with an unparseable partial → INVALID, non-approvable (DEBT-029)", async () => {
     const { tool } = makeDummyTool();
     const tools = new ToolRegistry([tool]);
     const llm = new CountingLlm(new StubLlmAdapter({ scenario: "cycle-until-max" }));
@@ -185,8 +196,45 @@ describe("AgentRunner — generic ReAct loop", () => {
 
     expect(llm.calls).toBe(2);
     expect(proposal.truncated).toBe(true);
+    // The dangling tool_use leaves an empty partial that fails outputSchema, so the
+    // run is staged as `invalid` (the gate hides/refuses it) — never a raw payload.
+    expect(proposal.status).toBe("invalid");
     expect(store.rows[0]!.steps).toBe(2);
+    expect(store.rows[0]!.envelope.status).toBe("invalid");
+  });
+
+  it("truncated but the partial still validates → kept as an approvable PENDING partial (DEBT-029)", async () => {
+    const store = new FakeStore();
+    const proposal = await runner(maxTokensLlm("Un racconto parziale ma valido."), store).run(
+      stubAgent(),
+      { subjectId: "s8", content: "scrivi" },
+      ctx(),
+    );
+
+    expect(proposal.truncated).toBe(true);
+    // lastContent passes the outputSchema → salvaged via parseOutput/schema, approvable.
+    expect(proposal.status).toBe("pending");
+    expect(proposal.payload).toBe("Un racconto parziale ma valido.");
     expect(store.rows[0]!.envelope.status).toBe("pending");
+  });
+
+  it("replay of an INVALID run stays invalid (no re-run, still non-approvable) (DEBT-029)", async () => {
+    const { tool } = makeDummyTool();
+    const tools = new ToolRegistry([tool]);
+    const llm = new CountingLlm(new StubLlmAdapter({ scenario: "cycle-until-max" }));
+    const store = new FakeStore();
+    const r = runner(llm, store, tools);
+    const def = stubAgent({ allowedTools: ["dummy"], maxSteps: 2 });
+    const input = { subjectId: "s9", content: "scrivi" };
+
+    const first = await r.run(def, input, ctx());
+    expect(first.status).toBe("invalid");
+    expect(llm.calls).toBe(2);
+
+    const second = await r.run(def, input, ctx());
+    expect(llm.calls).toBe(2); // replayed, not re-run
+    expect(second.status).toBe("invalid");
+    expect(second.id).toBe(first.runId);
   });
 
   it("idempotency: a second run with the same taskId returns the existing proposal, no LLM call", async () => {

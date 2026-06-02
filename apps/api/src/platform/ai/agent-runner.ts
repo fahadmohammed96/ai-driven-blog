@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Proposal } from "@blogs/contracts";
+import type { Proposal, ProposalStatus } from "@blogs/contracts";
 import { computeCostUsd } from "./metering";
 import type { BudgetGuard } from "./budget-guard";
 import type { LlmPort, LlmRequest } from "./llm";
@@ -64,6 +64,26 @@ function deriveTaskId(agentId: string, subjectId: string, triggeredAt: Date): st
     .update(`${agentId}|${subjectId}|${day}`)
     .digest("hex")
     .slice(0, 32);
+}
+
+/**
+ * Re-validate a truncated run's last content through the agent's OWN gate
+ * (`parseOutput` then `outputSchema`), so a partial that happens to validate is
+ * still usable while an unparseable one is flagged (DEBT-029). `parseOutput` may
+ * throw on garbage — that is treated as invalid, never propagated.
+ */
+function salvageTruncated<T>(
+  def: AgentDefinition<T>,
+  lastContent: string,
+): { payload: T; valid: boolean } {
+  try {
+    const candidate = def.parseOutput
+      ? def.parseOutput(lastContent)
+      : (lastContent as unknown as T);
+    return { payload: candidate, valid: def.outputSchema.safeParse(candidate).success };
+  } catch {
+    return { payload: lastContent as unknown as T, valid: false };
+  }
 }
 
 export class AgentRunner {
@@ -188,18 +208,38 @@ export class AgentRunner {
       break;
     }
 
-    const finalPayload = payload ?? (lastContent as unknown as T);
+    // Resolve the final payload + run status. A clean end_turn already produced a
+    // schema-valid `payload`. A truncated run did NOT, so re-run parseOutput +
+    // outputSchema on the last content (DEBT-029): if the partial validates we keep
+    // it as an approvable `pending` partial; if it does not, the run is `invalid` —
+    // staged NON-approvable (the gate hides it / refuses approval) instead of
+    // emitting a raw string that crashes the downstream gate.
+    let finalPayload: T;
+    let runStatus: RunEnvelope["status"];
+    if (payload !== undefined) {
+      finalPayload = payload;
+      runStatus = "completed";
+    } else {
+      const salvaged = salvageTruncated(def, lastContent);
+      finalPayload = salvaged.payload;
+      runStatus = salvaged.valid ? "pending" : "invalid";
+    }
+    const proposalStatus: ProposalStatus = runStatus === "invalid" ? "invalid" : "pending";
+
     const tokensUsed = { input: agg.input, output: agg.output, cached: agg.cached };
     const estimatedCostUsd = computeCostUsd(def.model, {
       inputTokens: agg.input,
       outputTokens: agg.output,
       cacheReadTokens: agg.cached,
     });
-    const rationale = truncated
-      ? `Run truncated after ${steps} step(s): a cap (maxSteps/maxContextTokens/maxTokens) was reached; partial result.`
-      : `Completed in ${steps} step(s).`;
+    const rationale =
+      runStatus === "invalid"
+        ? `Run truncated after ${steps} step(s) and the partial output failed validation; not approvable.`
+        : truncated
+          ? `Run truncated after ${steps} step(s): a cap (maxSteps/maxContextTokens/maxTokens) was reached; partial result.`
+          : `Completed in ${steps} step(s).`;
     const envelope: RunEnvelope = {
-      status: truncated ? "pending" : "completed",
+      status: runStatus,
       payload: finalPayload,
       rationale,
       estimatedCostUsd,
@@ -242,7 +282,7 @@ export class AgentRunner {
       rationale,
       estimatedCostUsd,
       tokensUsed,
-      status: "pending",
+      status: proposalStatus,
       requiresHumanGate: true,
       truncated,
       auditRecorded,
@@ -270,7 +310,9 @@ export class AgentRunner {
       rationale: env.rationale,
       estimatedCostUsd: env.estimatedCostUsd,
       tokensUsed: env.tokensUsed,
-      status: "pending",
+      // A run recorded `invalid` (truncated + unparseable) replays as invalid, so a
+      // retry stays non-approvable rather than reconstructing a crashing payload.
+      status: env.status === "invalid" ? "invalid" : "pending",
       requiresHumanGate: true,
       truncated: env.truncated,
       auditRecorded: true,
