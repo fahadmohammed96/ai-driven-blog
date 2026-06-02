@@ -3,6 +3,7 @@ import { Module } from "@nestjs/common";
 import { TenancyModule } from "../tenancy";
 import { SettingsModule } from "../settings";
 import { CrmController } from "./crm.controller";
+import { InboundAgentController } from "./agents/inbound-agent.controller";
 
 /**
  * CRM custom-trip pipeline (Fase 3, motion "Su misura" — INBOUND/one-to-one). The
@@ -13,6 +14,6 @@ import { CrmController } from "./crm.controller";
  */
 @Module({
   imports: [TenancyModule, SettingsModule],
-  controllers: [CrmController],
+  controllers: [CrmController, InboundAgentController],
 })
 export class CrmModule {}

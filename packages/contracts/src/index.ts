@@ -25,6 +25,7 @@ export * from "./analytics-report";
 export * from "./feedback";
 export * from "./onboarding";
 export * from "./proposal";
+export * from "./inbound";
 export * from "./research";
 export * from "./seo";
 export * from "./email";

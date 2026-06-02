@@ -195,7 +195,9 @@ export class PostgresAgentProposalStore implements AgentProposalStore {
               ? await approveEmailDraft(tx, tenantId, row, this.emailSink)
               : row.type === "analyst_insight"
                 ? approveAnalystInsight(row)
-                : await approveContentDraft(tx, tenantId, row);
+                : row.type === "lead_classification"
+                  ? approveInboundClassification(row)
+                  : await approveContentDraft(tx, tenantId, row);
       await tx
         .update(agentProposals)
         .set({ status: "approved", reviewedAt: sql`now()` })
@@ -315,6 +317,23 @@ async function approveEmailDraft(
  * no `draft`) OUT of the `content_draft` default that would crash on it.
  */
 function approveAnalystInsight(
+  row: typeof agentProposals.$inferSelect,
+): AcknowledgedProposal {
+  return { id: row.id, status: "approved" };
+}
+
+/**
+ * `lead_classification` gate (Inbound Agent, Slice O2): ACKNOWLEDGE-ONLY / NO-SEND.
+ * An Inbound triage is INFORMATIVE — the founder RECOGNISES it and then acts via
+ * the EXISTING Fase-3 lead pipeline (`createLead`/`approveAndSend`) or replies by
+ * hand. Approving it here mutates NO `lead`, sends NO notification (the no-send
+ * invariant is structural: this branch simply does not send), and performs NO
+ * publication transition. The outer `approve` flips `status:'approved'` after this
+ * branch; here we only echo the proposal's id + that resulting status. This is
+ * also the guard that keeps the `InboundProposal` payload (which has no `draft`)
+ * OUT of the `content_draft` default that would crash on it (Slice O2 design crux).
+ */
+function approveInboundClassification(
   row: typeof agentProposals.$inferSelect,
 ): AcknowledgedProposal {
   return { id: row.id, status: "approved" };

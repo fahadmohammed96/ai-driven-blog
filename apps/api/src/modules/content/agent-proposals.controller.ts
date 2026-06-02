@@ -70,6 +70,8 @@ interface ProposalView {
   /** Slice O1: the Analyst report's narrative, surfaced for `analyst_insight`. */
   insights: string[];
   recommendations: string[];
+  /** Slice O2: the Inbound triage, surfaced for `lead_classification` (text only). */
+  inbound: { classification: string; proposedReply: string; suggestedNextAction: string } | null;
   createdAt: Date;
 }
 
@@ -256,15 +258,33 @@ function toView(p: StagedProposal): ProposalView {
     title?: string;
     insights?: unknown;
     recommendations?: unknown;
+    classification?: unknown;
+    proposedReply?: unknown;
+    suggestedNextAction?: unknown;
   };
   const draft = typeof payload.draft === "string" ? payload.draft : "";
-  // INFORMATIVE proposals (Slice O1) carry no `draft`/`title`; surface their
+  // INFORMATIVE proposals (Slice O1/O2) carry no `draft`/`title`; surface their
   // narrative and a meaningful fallback title instead of the generic "Bozza AI".
   const strings = (v: unknown): string[] =>
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
   const insights = p.type === "analyst_insight" ? strings(payload.insights) : [];
   const recommendations = p.type === "analyst_insight" ? strings(payload.recommendations) : [];
-  const fallbackTitle = p.type === "analyst_insight" ? "Report performance" : "Bozza AI";
+  // Slice O2: the Inbound triage (plain text — the card React-escapes; no href).
+  const inbound =
+    p.type === "lead_classification"
+      ? {
+          classification: str(payload.classification),
+          proposedReply: str(payload.proposedReply),
+          suggestedNextAction: str(payload.suggestedNextAction),
+        }
+      : null;
+  const fallbackTitle =
+    p.type === "analyst_insight"
+      ? "Report performance"
+      : p.type === "lead_classification"
+        ? "Classificazione inbound"
+        : "Bozza AI";
   return {
     id: p.id,
     agentName: p.agentName,
@@ -280,6 +300,7 @@ function toView(p: StagedProposal): ProposalView {
     researchContext: p.researchContext,
     insights,
     recommendations,
+    inbound,
     createdAt: p.createdAt,
   };
 }

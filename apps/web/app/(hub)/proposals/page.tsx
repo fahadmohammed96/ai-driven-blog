@@ -47,6 +47,8 @@ interface AgentProposal {
   /** The Analyst report's narrative (Slice O1) — present for `analyst_insight`. */
   insights: string[];
   recommendations: string[];
+  /** The Inbound triage (Slice O2) — present for `lead_classification`. */
+  inbound: { classification: string; proposedReply: string; suggestedNextAction: string } | null;
 }
 
 /** Edit a proposal = open it in the slice-2 Block Editor (same URL contract). */
@@ -258,6 +260,27 @@ export default function ProposalsSurface() {
                         )}
                       </div>
                     )}
+
+                  {/* Slice O2 — Inbound triage: classification + proposed reply +
+                      next action (plain text, React-escaped — no href, output-safe).
+                      Shown only for `lead_classification`; approval is acknowledge-only. */}
+                  {p.type === "lead_classification" && p.inbound && (
+                    <div data-testid="agent-proposal-inbound" style={{ display: "grid", gap: space.xs }}>
+                      <span style={{ fontSize: font.size.sm, color: color.textMuted }}>
+                        Classificazione: <strong style={{ color: color.text }}>{p.inbound.classification}</strong>
+                      </span>
+                      {p.inbound.proposedReply && (
+                        <p style={{ margin: 0, color: color.text, fontSize: font.size.sm }}>
+                          Risposta proposta: {p.inbound.proposedReply}
+                        </p>
+                      )}
+                      {p.inbound.suggestedNextAction && (
+                        <p style={{ margin: 0, color: color.textMuted, fontSize: font.size.sm }}>
+                          Prossima azione: {p.inbound.suggestedNextAction}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Slice X1 — "Fonti usate dal Ricercatore": shown only when the
                       external-research flag enriched this proposal (critica #14). */}
