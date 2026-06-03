@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, Card, StateBadge, type PublicationStatus } from "../../../src/ui/components";
+import { PageHeader, Card, StateBadge, SectionTitle, EmptyState, type PublicationStatus } from "../../../src/ui/components";
 import { color, font, radius, space } from "../../../src/ui/tokens";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -162,25 +162,38 @@ export default function ProposalsSurface() {
 
       {/* Slice T1 — staged AI-agent proposals: cost + residual budget + the
           agent's reasoning, approved into the same publish state machine. */}
-      <section data-testid="surface-agent-proposals" style={{ marginBottom: space.lg }}>
-        <h2 style={{ fontSize: font.size.lg, color: color.text, margin: `0 0 ${space.sm}` }}>
-          Proposte degli agenti
-        </h2>
-        {budgetResiduo !== null && (
-          <p
-            data-testid="agent-budget-residuo"
-            style={{ margin: `0 0 ${space.md}`, color: color.textMuted, fontSize: font.size.sm }}
-          >
-            Budget residuo del mese: <strong>{usd(budgetResiduo)}</strong>
-          </p>
-        )}
+      <section data-testid="surface-agent-proposals" style={{ marginBottom: space.xl }}>
+        <SectionTitle
+          trailing={
+            budgetResiduo !== null ? (
+              <span
+                data-testid="agent-budget-residuo"
+                title="Budget residuo del mese"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: space.xs,
+                  fontSize: font.size.sm,
+                  fontWeight: font.weight.semibold,
+                  color: color.approved,
+                  background: `${color.approved}14`,
+                  border: `1px solid ${color.approved}3d`,
+                  borderRadius: radius.pill,
+                  padding: `4px ${space.md}`,
+                }}
+              >
+                Budget residuo {usd(budgetResiduo)}
+              </span>
+            ) : undefined
+          }
+        >
+          🧠 Proposte degli agenti
+        </SectionTitle>
 
         {agentItems.length === 0 ? (
-          <Card testId="agent-proposals-empty">
-            <p style={{ margin: 0, color: color.textMuted }}>
-              Nessuna proposta degli agenti in attesa.
-            </p>
-          </Card>
+          <EmptyState testId="agent-proposals-empty" icon="🧠" title="Nessuna proposta degli agenti in attesa">
+            Quando uno specialista propone del lavoro, lo trovi qui — con costo, ragionamento e fonti.
+          </EmptyState>
         ) : (
           <ul
             data-testid="agent-proposals-list"
@@ -203,8 +216,22 @@ export default function ProposalsSurface() {
                   </span>
 
                   <span style={{ display: "flex", alignItems: "center", gap: space.md, flexWrap: "wrap" }}>
-                    <span data-testid="agent-proposal-cost" style={{ fontSize: font.size.sm, color: color.text }}>
-                      Costo stimato: <strong>{usd(p.estimatedCostUsd)}</strong>
+                    <span
+                      data-testid="agent-proposal-cost"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: space.xs,
+                        fontSize: font.size.xs,
+                        fontWeight: font.weight.semibold,
+                        color: color.accentText,
+                        background: color.accentSoft,
+                        border: `1px solid ${color.accentBorder}`,
+                        borderRadius: radius.pill,
+                        padding: `3px ${space.sm}`,
+                      }}
+                    >
+                      💲 Costo stimato {usd(p.estimatedCostUsd)}
                     </span>
                   </span>
 
@@ -345,12 +372,12 @@ export default function ProposalsSurface() {
         )}
       </section>
 
+      <SectionTitle>📥 In coda di pubblicazione</SectionTitle>
+
       {loaded && items.length === 0 && !error && (
-        <Card testId="proposals-empty">
-          <p style={{ margin: 0, color: color.textMuted }}>
-            Nessuna proposta in attesa di una decisione.
-          </p>
-        </Card>
+        <EmptyState testId="proposals-empty" icon="✅" title="Nessuna proposta in attesa di una decisione">
+          Tutto approvato o rifiutato. Le nuove proposte appariranno qui.
+        </EmptyState>
       )}
 
       <ul

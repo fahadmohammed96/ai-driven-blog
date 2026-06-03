@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, Card, StateBadge, type PublicationStatus } from "../../../src/ui/components";
+import { PageHeader, Card, StateBadge, Toolbar, EmptyState, type PublicationStatus } from "../../../src/ui/components";
 import { color, font, radius, space } from "../../../src/ui/tokens";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
@@ -70,8 +70,8 @@ export default function LibrarySurface() {
         subtitle="Tutti i contenuti, filtrabili, con il badge di stato dalla macchina a stati di pubblicazione."
       />
 
-      <div style={{ display: "flex", gap: space.md, marginBottom: space.lg }}>
-        <label style={{ fontSize: font.size.sm, color: color.textMuted }}>
+      <Toolbar>
+        <label style={{ fontSize: font.size.sm, color: color.textMuted, display: "inline-flex", alignItems: "center", gap: space.xs }}>
           Tipo{" "}
           <select
             data-testid="filter-type"
@@ -87,7 +87,7 @@ export default function LibrarySurface() {
             ))}
           </select>
         </label>
-        <label style={{ fontSize: font.size.sm, color: color.textMuted }}>
+        <label style={{ fontSize: font.size.sm, color: color.textMuted, display: "inline-flex", alignItems: "center", gap: space.xs }}>
           Stato{" "}
           <select
             data-testid="filter-status"
@@ -103,7 +103,7 @@ export default function LibrarySurface() {
             ))}
           </select>
         </label>
-      </div>
+      </Toolbar>
 
       {error && (
         <p data-testid="library-error" style={{ color: color.danger }}>
@@ -112,9 +112,9 @@ export default function LibrarySurface() {
       )}
 
       {loaded && items.length === 0 && !error && (
-        <Card testId="library-empty">
-          <p style={{ margin: 0, color: color.textMuted }}>Nessun contenuto per questi filtri.</p>
-        </Card>
+        <EmptyState testId="library-empty" icon="📚" title="Nessun contenuto per questi filtri">
+          Cambia i filtri qui sopra, o genera un nuovo contenuto dalla Proposal Queue.
+        </EmptyState>
       )}
 
       <ul
@@ -124,14 +124,17 @@ export default function LibrarySurface() {
         {items.map((item) => (
           <li key={item.id} data-testid="library-item" data-type={item.type} data-status={item.status}>
             <Link href={editorHref(item.id)} style={{ textDecoration: "none", color: "inherit" }}>
-              <Card style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span>
-                  <span style={{ fontWeight: 600, color: color.text }}>{item.title}</span>
-                  <span style={{ marginLeft: space.sm, color: color.textMuted, fontSize: font.size.sm }}>
-                    {item.type}
+              <Card interactive style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: space.md, padding: `${space.md} ${space.lg}` }}>
+                <span style={{ display: "flex", alignItems: "center", gap: space.md, minWidth: 0 }}>
+                  <span style={typeChip}>{item.type}</span>
+                  <span style={{ fontWeight: 600, color: color.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {item.title}
                   </span>
                 </span>
-                <StateBadge status={item.status as PublicationStatus} />
+                <span style={{ display: "flex", alignItems: "center", gap: space.md, flexShrink: 0 }}>
+                  <StateBadge status={item.status as PublicationStatus} />
+                  <span aria-hidden style={{ color: color.textFaint }}>→</span>
+                </span>
               </Card>
             </Link>
           </li>
@@ -143,9 +146,21 @@ export default function LibrarySurface() {
 
 const selectStyle = {
   fontSize: font.size.sm,
-  padding: `2px ${space.sm}`,
+  padding: `5px ${space.sm}`,
   borderRadius: radius.sm,
-  border: `1px solid ${color.border}`,
+  border: `1px solid ${color.borderStrong}`,
   background: color.surface,
   color: color.text,
 };
+
+const typeChip = {
+  flexShrink: 0,
+  fontSize: font.size.xs,
+  fontWeight: font.weight.semibold,
+  color: color.textMuted,
+  background: color.surfaceMuted,
+  border: `1px solid ${color.border}`,
+  borderRadius: radius.sm,
+  padding: `2px 8px`,
+  textTransform: "capitalize" as const,
+} as const;
