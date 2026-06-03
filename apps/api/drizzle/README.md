@@ -46,3 +46,21 @@ policy `tenant_isolation` su entrambe aggiunte a mano** in coda.
 Tabella `connector_credentials` (token OAuth **cifrati** a riposo: `access_token`/
 `refresh_token` sealed, `expires_at`; unique `(tenant_id,connector)`). Generato da
 drizzle-kit; **RLS + policy `tenant_isolation` aggiunta a mano** in coda.
+
+## `0012_*.sql` — metric_snapshots: chiave unica per idempotenza (fix 4.3)
+Vincolo `UNIQUE NULLS NOT DISTINCT (tenant_id, source, channel, metric, period)` su
+`metric_snapshots`. L'ingest è "replace-per-source" (delete→insert) + ora **upsert**
+su questa chiave: rende un duplicato fisicamente impossibile, così anche ingest
+**concorrenti/sovrapposti** restano idempotenti (la race che il gate E2E condiviso
+ha esposto). Generato da drizzle-kit; **rifinito a mano** con una DELETE di
+de-duplica *prima* dell'ADD CONSTRAINT (un DB che ha già accumulato duplicati non
+fallirebbe la migrazione). `NULLS NOT DISTINCT` perché un `channel` null non deve
+poter aggirare il vincolo.
+
+## `0013_*.sql` — ai_usage_events (Slice R1-B · metering AI)
+Tabella `ai_usage_events` (una riga per chiamata LLM: `agent_name`, `model`,
+`input_tokens`/`output_tokens`, `cost_usd` numeric, `run_id` nullable). È la
+ground-truth del circuit-breaker di budget per-tenant (`SUM(cost_usd)` del mese).
+Generato da drizzle-kit; **RLS + policy `tenant_isolation` aggiunte a mano** in coda
+(come da nota in cima). `run_id` è **senza FK** finché `ai_agent_runs` non esiste
+(A1-core lo vincolerà — DEBT-019).

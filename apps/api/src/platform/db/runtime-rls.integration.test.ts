@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -11,7 +12,21 @@ import { Pool } from "pg";
 import { createDb, type Db } from "./client";
 import { withTenant } from "./tenant";
 import { ensureAppRole, isRlsBypassed } from "./bootstrap";
-import { contentItems, itineraryStops, mediaAssets, itineraryStopPhotos } from "./schema";
+import { DEFAULT_TENANT_SETTINGS } from "@blogs/contracts";
+import {
+  contentItems,
+  itineraryStops,
+  mediaAssets,
+  itineraryStopPhotos,
+  tenantSettings,
+  affiliateLinks,
+  affiliateClicks,
+  trips,
+  departures,
+  bookings,
+  leads,
+  metricSnapshots,
+} from "./schema";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(here, "../../../drizzle");
@@ -100,5 +115,124 @@ describe("runtime RLS via the least-privilege app role (DEBT-005)", () => {
       return links.length;
     });
     expect(linkCount).toBeGreaterThan(0);
+  });
+
+  // Regression guard: every tenant-scoped table the runtime touches must be in
+  // bootstrap's APP_RW_TABLES, or the app role gets "permission denied" at
+  // runtime (slice 4: tenant_settings was missing → settings GET 500 in e2e).
+  it("can write+read tenant_settings as the app role (grant present)", async () => {
+    const stored = await withTenant(appDb, TENANT_A, async (tx) => {
+      await tx.insert(tenantSettings).values({
+        tenantId: TENANT_A,
+        settings: DEFAULT_TENANT_SETTINGS,
+      });
+      return tx.select().from(tenantSettings);
+    });
+    expect(stored).toHaveLength(1);
+    expect(stored[0]!.settings.specialistAutonomy.writer).toBe("manual");
+  });
+
+  // Same grant guard for the Fase-3 affiliate tables: the redirector inserts a
+  // click row and the read endpoints select from both tables as the app role.
+  it("can write+read affiliate_links and affiliate_clicks as the app role (grants present)", async () => {
+    const clicks = await withTenant(appDb, TENANT_A, async (tx) => {
+      const [link] = await tx
+        .insert(affiliateLinks)
+        .values({ tenantId: TENANT_A, code: "grant-check", targetUrl: "https://example.com/g" })
+        .returning();
+      await tx
+        .insert(affiliateClicks)
+        .values({ tenantId: TENANT_A, linkId: link!.id, channel: "blog" });
+      return tx.select().from(affiliateClicks);
+    });
+    expect(clicks.length).toBeGreaterThan(0);
+  });
+
+  // Same grant guard for the Fase-3 commerce tables: the booking flow inserts
+  // trips/departures/bookings and updates bookings as the app role.
+  it("can write+read trips, departures and bookings as the app role (grants present)", async () => {
+    const rows = await withTenant(appDb, TENANT_A, async (tx) => {
+      const [ci] = await tx
+        .insert(contentItems)
+        .values({ tenantId: TENANT_A, type: "itinerary", title: "Commerce grant" })
+        .returning();
+      const [trip] = await tx
+        .insert(trips)
+        .values({
+          tenantId: TENANT_A,
+          itineraryId: ci!.id,
+          title: "Grant trip",
+          priceCents: 100_000,
+          depositCents: 20_000,
+        })
+        .returning();
+      const [dep] = await tx
+        .insert(departures)
+        .values({ tenantId: TENANT_A, tripId: trip!.id, departureDate: "2026-08-01", seats: 4 })
+        .returning();
+      const [booking] = await tx
+        .insert(bookings)
+        .values({
+          tenantId: TENANT_A,
+          departureId: dep!.id,
+          customerEmail: "grant@a.com",
+          status: "reserved",
+          depositCents: 20_000,
+        })
+        .returning();
+      await tx.update(bookings).set({ status: "confirmed" });
+      return tx.select().from(bookings).where(eq(bookings.id, booking!.id));
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("confirmed");
+  });
+
+  // Same grant guard for the Fase-3 CRM table: the custom-trip pipeline inserts a
+  // lead and updates it through the pipeline (proposal/deposit/deliver) as the app
+  // role. A missing grant = "permission denied for table leads" at runtime.
+  it("can write+read leads as the app role (grant present)", async () => {
+    const rows = await withTenant(appDb, TENANT_A, async (tx) => {
+      const [lead] = await tx
+        .insert(leads)
+        .values({
+          tenantId: TENANT_A,
+          customerEmail: "lead@a.com",
+          channel: "email",
+          request: "Custom trip to Patagonia",
+          portalToken: "grant-check-token",
+        })
+        .returning();
+      await tx.update(leads).set({ status: "ai_drafted", proposal: "Bozza" }).where(eq(leads.id, lead!.id));
+      return tx.select().from(leads).where(eq(leads.id, lead!.id));
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.status).toBe("ai_drafted");
+  });
+
+  // Same grant guard for the Fase-4 analytics table: ingestion deletes + inserts
+  // metric_snapshots, and the dashboard selects from it, as the app role. A
+  // missing grant = "permission denied for table metric_snapshots" at runtime.
+  it("can write+read metric_snapshots as the app role (grant present)", async () => {
+    const rows = await withTenant(appDb, TENANT_A, async (tx) => {
+      await tx.insert(metricSnapshots).values({
+        tenantId: TENANT_A,
+        source: "affiliate",
+        channel: "blog",
+        metric: "clicks",
+        value: 3,
+      });
+      // Ingestion replaces a source's rows → the app role must also DELETE.
+      await tx.delete(metricSnapshots).where(eq(metricSnapshots.source, "affiliate"));
+      await tx.insert(metricSnapshots).values({
+        tenantId: TENANT_A,
+        source: "affiliate",
+        channel: "blog",
+        metric: "clicks",
+        value: 5,
+      });
+      return tx.select().from(metricSnapshots).where(eq(metricSnapshots.source, "affiliate"));
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.value).toBe(5);
   });
 });

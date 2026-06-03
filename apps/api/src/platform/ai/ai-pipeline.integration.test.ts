@@ -11,7 +11,7 @@ import { createDb, type Db } from "../db/client";
 import { HashingEmbedder } from "./embedder";
 import { storeChunk, retrieveSimilar } from "./rag";
 import { generateDraft, type BrandVoice } from "./pipeline";
-import type { LlmClient, LlmInput } from "./llm";
+import type { LlmPort, LlmRequest, LlmResponse } from "./llm";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = resolve(here, "../../../drizzle"); // src/platform/ai -> apps/api/drizzle
@@ -24,11 +24,17 @@ const CHUNKS = [
   "Italia: storia antica, Roma e il Colosseo.",
 ];
 
-class FakeLlm implements LlmClient {
-  public lastCall: LlmInput | undefined;
-  async complete(input: LlmInput): Promise<string> {
-    this.lastCall = input;
-    return `BOZZA(${input.system.length}): ${input.prompt.slice(0, 40)}`;
+class FakeLlm implements LlmPort {
+  public lastReq: LlmRequest | undefined;
+  async complete(req: LlmRequest): Promise<LlmResponse> {
+    this.lastReq = req;
+    const systemLen = req.system.map((b) => b.text).join(" ").length;
+    const userText = req.messages.find((m) => m.role === "user")?.content ?? "";
+    return {
+      content: `BOZZA(${systemLen}): ${userText.slice(0, 40)}`,
+      stopReason: "end_turn",
+      usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 },
+    };
   }
 }
 
@@ -81,6 +87,8 @@ describe("RAG over pgvector", () => {
     expect(result.draft.length).toBeGreaterThan(0);
     expect(result.usedContext[0]).toContain("ramen");
     expect(result.system).toContain("entusiasta");
-    expect(llm.lastCall?.prompt).toContain("ramen");
+    expect(llm.lastReq?.messages.find((m) => m.role === "user")?.content).toContain(
+      "ramen",
+    );
   });
 });

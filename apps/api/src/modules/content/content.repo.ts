@@ -1,5 +1,5 @@
-import { eq, sql } from "drizzle-orm";
-import type { Block, PublicationStatus } from "@blogs/contracts";
+import { and, desc, eq, sql, type SQL } from "drizzle-orm";
+import type { Block, PublicationStatus, SeoProposal } from "@blogs/contracts";
 import type { Db } from "../../platform/db/client";
 import { withTenant, type Tx } from "../../platform/db/tenant";
 import { contentItems } from "../../platform/db/schema";
@@ -41,6 +41,32 @@ export async function insertContentItem(tx: Tx, input: NewContentItem): Promise<
   return row as ContentItemRow;
 }
 
+/** Optional filters for the content-item list read-model. */
+export interface ContentListFilters {
+  type?: ContentType;
+  status?: PublicationStatus;
+}
+
+/**
+ * List the current tenant's content items (RLS scopes to the tenant context),
+ * newest-touched first. `type` / `status` narrow the result when provided.
+ * Read-model behind the Library surface (slice 1).
+ */
+export async function listContentItems(
+  tx: Tx,
+  filters: ContentListFilters = {},
+): Promise<ContentItemRow[]> {
+  const conds: SQL[] = [];
+  if (filters.type) conds.push(eq(contentItems.type, filters.type));
+  if (filters.status) conds.push(eq(contentItems.status, filters.status));
+  const where = conds.length ? and(...conds) : undefined;
+  return tx
+    .select()
+    .from(contentItems)
+    .where(where)
+    .orderBy(desc(contentItems.updatedAt));
+}
+
 /** Fetch a content item by id (RLS returns null for other tenants). */
 export async function getContentItem(tx: Tx, id: string): Promise<ContentItemRow | null> {
   const rows = await tx.select().from(contentItems).where(eq(contentItems.id, id));
@@ -57,6 +83,28 @@ export async function updateContentItem(
     .update(contentItems)
     .set({ ...patch, updatedAt: sql`now()` })
     .where(eq(contentItems.id, id));
+}
+
+/**
+ * Annotate a content item with an approved {@link SeoProposal} (Slice S1). This
+ * is NON-BLOCKING: it writes the `seo_proposal` JSONB field and bumps
+ * `updated_at`, but does NOT touch the publication `status` — the SEO enriches
+ * the item, it never gates it. RLS scopes the write to the current tenant; a
+ * missing/foreign item throws {@link ContentNotFoundError}.
+ */
+export async function annotateSeoProposal(
+  tx: Tx,
+  id: string,
+  seoProposal: SeoProposal,
+): Promise<ContentItemRow> {
+  const item = await getContentItem(tx, id);
+  if (!item) throw new ContentNotFoundError(id);
+  const [row] = await tx
+    .update(contentItems)
+    .set({ seoProposal, updatedAt: sql`now()` })
+    .where(eq(contentItems.id, id))
+    .returning();
+  return row as ContentItemRow;
 }
 
 /**
@@ -98,6 +146,45 @@ export function applyTransition(
 /** Publish a content item (idempotent): convenience for the 'publish' event. */
 export function publishContentItem(db: Db, tenantId: string, id: string): Promise<ContentItemRow> {
   return applyTransition(db, tenantId, id, "publish");
+}
+
+/**
+ * The legal chain an item awaiting a human decision walks to reach 'approved'.
+ * `proposed` first enters `review`, then is approved — the human's "approve" on
+ * the Proposal Queue (slice 3) collapses that chain into one gesture.
+ */
+const APPROVE_PATH: Partial<Record<PublicationStatus, PublicationEvent>> = {
+  proposed: "startReview",
+  review: "approve",
+};
+
+export type ProposalDecision = "approve" | "reject";
+
+/**
+ * Apply a human decision to a content item awaiting review (status `proposed`
+ * or `review`) over the publish state machine, atomically and tenant-scoped
+ * (RLS). `approve` walks it to `approved` through the legal chain
+ * (proposed→review→approved); `reject` sends it back to `draft` (requestChanges).
+ * An illegal source state throws {@link InvalidTransitionError}; a missing/foreign
+ * item throws {@link ContentNotFoundError}.
+ */
+export async function decideContentItem(
+  db: Db,
+  tenantId: string,
+  id: string,
+  decision: ProposalDecision,
+): Promise<ContentItemRow> {
+  return withTenant(db, tenantId, async (tx) => {
+    let item = await getContentItem(tx, id);
+    if (!item) throw new ContentNotFoundError(id);
+    if (decision === "reject") return transitionContentItem(tx, id, "requestChanges");
+    while (item.status !== "approved") {
+      const event = APPROVE_PATH[item.status as PublicationStatus];
+      if (!event) throw new InvalidTransitionError(item.status as PublicationStatus, "approve");
+      item = await transitionContentItem(tx, id, event);
+    }
+    return item;
+  });
 }
 
 /** Event that advances each non-terminal status toward 'published'. */

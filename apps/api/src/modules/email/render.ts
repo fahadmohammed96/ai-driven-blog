@@ -1,15 +1,8 @@
 import type { Theme } from "@blogs/contracts";
 import type { EmailMessage } from "./email.port";
+import { escapeHtml } from "./html";
 
 const DEFAULT_FROM = "Blogs Manager <no-reply@blogs.local>";
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 /** Double opt-in confirmation email: the tokenized link is the proof of consent. */
 export function renderConfirmEmail(opts: {

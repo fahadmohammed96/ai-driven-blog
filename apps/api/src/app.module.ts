@@ -6,7 +6,16 @@ import { TenancyModule } from "./modules/tenancy";
 import { ContentModule } from "./modules/content";
 import { AuthModule } from "./modules/auth";
 import { SocialModule } from "./modules/social";
+import { SeoModule } from "./modules/seo";
 import { EmailModule } from "./modules/email";
+import { SettingsModule } from "./modules/settings";
+import { MonetizationModule } from "./modules/monetization";
+import { CommerceModule } from "./modules/commerce";
+import { CrmModule } from "./modules/crm";
+import { AnalyticsModule } from "./modules/analytics";
+import { FeedbackModule } from "./modules/feedback";
+import { OnboardingModule } from "./modules/onboarding";
+import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
 import { TravelModule } from "./verticals/travel/travel.module";
 
 @Module({
@@ -16,7 +25,16 @@ import { TravelModule } from "./verticals/travel/travel.module";
     ContentModule,
     AuthModule,
     SocialModule,
+    SeoModule,
     EmailModule,
+    SettingsModule,
+    MonetizationModule,
+    CommerceModule,
+    CrmModule,
+    AnalyticsModule,
+    FeedbackModule,
+    OnboardingModule,
+    OrchestratorModule,
     TravelModule,
   ],
   controllers: [AppController],

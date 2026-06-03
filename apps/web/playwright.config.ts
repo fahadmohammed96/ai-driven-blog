@@ -16,11 +16,19 @@ const apiEnv: Record<string, string> = {
   S3_ACCESS_KEY: process.env.S3_ACCESS_KEY ?? "minio",
   S3_SECRET_KEY: process.env.S3_SECRET_KEY ?? "minio12345",
   S3_BUCKET: process.env.S3_BUCKET ?? "media",
+  // Seals per-tenant BYOK keys in connector_credentials (Slice T2). Any non-empty
+  // value works for e2e; production provisions a real secret (DEBT-008/023).
+  CONNECTOR_SECRET_KEY: process.env.CONNECTOR_SECRET_KEY ?? "e2e-connector-secret-key",
 };
 
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
+  // The e2e specs share one backend/tenant (the founder settings row, etc.), so
+  // running specs concurrently races on shared mutable state (budget/settings get
+  // clobbered mid-test). Run serially for a deterministic gate — the suite is fast
+  // (~21 quick specs) so the wall-clock cost is small.
+  workers: 1,
   use: { baseURL: "http://localhost:3100" },
   webServer: [
     {
