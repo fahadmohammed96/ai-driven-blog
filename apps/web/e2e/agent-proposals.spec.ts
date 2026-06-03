@@ -74,3 +74,25 @@ test("agent proposal: generate → queue (cost + budget + reasoning) → approve
   const reviewItems = (await inReview.json()).items as Array<{ title: string }>;
   expect(reviewItems.some((i) => i.title === title)).toBeTruthy();
 });
+
+// Slice A2 — the founder can ASK the AI to propose from the Proposals surface
+// itself (no API/job needed): fill the brief, trigger the Writer agent, and the
+// staged proposal shows up in the queue, ready to approve.
+test("ask the AI to propose from the Proposals surface → the card appears and is actionable", async ({
+  page,
+}) => {
+  const ts = Date.now();
+  const title = `E2E UI Agente ${ts}`;
+
+  await page.goto("/proposals");
+  await page.getByTestId("agent-generate-title").fill(title);
+  await page.getByTestId("agent-generate-brief").fill(`Brief unico per il test ${ts}`);
+  await page.getByTestId("agent-generate-submit").click();
+
+  const card = page.getByTestId("agent-proposal-item").filter({ hasText: title });
+  await expect(card).toBeVisible();
+
+  // It is immediately actionable: approve consumes it into the publish queue.
+  await card.getByTestId("agent-proposal-approve").click();
+  await expect(card).toHaveCount(0);
+});

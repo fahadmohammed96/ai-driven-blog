@@ -70,6 +70,10 @@ export default function ProposalsSurface() {
   const [agentItems, setAgentItems] = useState<AgentProposal[]>([]);
   const [budgetResiduo, setBudgetResiduo] = useState<number | null>(null);
   const [agentBusy, setAgentBusy] = useState<string | null>(null);
+  // Slice A2 — "ask the AI to propose": trigger a Writer-agent run from the Hub.
+  const [genTitle, setGenTitle] = useState("");
+  const [genBrief, setGenBrief] = useState("");
+  const [generating, setGenerating] = useState(false);
 
   const loadAgents = useCallback(async () => {
     try {
@@ -82,6 +86,27 @@ export default function ProposalsSurface() {
       setError("Caricamento proposte agenti fallito");
     }
   }, []);
+
+  const generate = useCallback(async () => {
+    if (!genTitle.trim() || !genBrief.trim()) return;
+    setGenerating(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/agent-proposals/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: genTitle, brief: genBrief }),
+      });
+      if (!res.ok) throw new Error("generate failed");
+      setGenTitle("");
+      setGenBrief("");
+      await loadAgents();
+    } catch {
+      setError("Generazione proposta fallita");
+    } finally {
+      setGenerating(false);
+    }
+  }, [genTitle, genBrief, loadAgents]);
 
   const load = useCallback(async () => {
     setError(null);
@@ -189,6 +214,35 @@ export default function ProposalsSurface() {
         >
           🧠 Proposte degli agenti
         </SectionTitle>
+
+        <Card testId="agent-generate" style={{ display: "grid", gap: space.sm, marginBottom: space.md }}>
+          <span style={{ fontWeight: 600, color: color.text }}>Chiedi una proposta all&apos;AI</span>
+          <input
+            data-testid="agent-generate-title"
+            value={genTitle}
+            onChange={(e) => setGenTitle(e.target.value)}
+            placeholder="Titolo (es. 3 giorni a Lisbona)"
+            style={composeInput}
+          />
+          <textarea
+            data-testid="agent-generate-brief"
+            value={genBrief}
+            onChange={(e) => setGenBrief(e.target.value)}
+            placeholder="Brief: di cosa deve parlare, taglio, dettagli…"
+            rows={2}
+            style={{ ...composeInput, resize: "vertical" }}
+          />
+          <span>
+            <button
+              data-testid="agent-generate-submit"
+              onClick={generate}
+              disabled={generating || !genTitle.trim() || !genBrief.trim()}
+              style={primaryButton(generating || !genTitle.trim() || !genBrief.trim())}
+            >
+              {generating ? "Sto chiedendo…" : "Chiedi una proposta all'AI"}
+            </button>
+          </span>
+        </Card>
 
         {agentItems.length === 0 ? (
           <EmptyState testId="agent-proposals-empty" icon="🧠" title="Nessuna proposta degli agenti in attesa">
@@ -435,6 +489,16 @@ const buttonBase = {
   borderRadius: radius.sm,
   border: "none",
   textDecoration: "none",
+} as const;
+
+const composeInput = {
+  fontSize: font.size.sm,
+  padding: space.sm,
+  borderRadius: radius.sm,
+  border: `1px solid ${color.border}`,
+  background: color.surface,
+  color: color.text,
+  fontFamily: font.family,
 } as const;
 
 function primaryButton(disabled: boolean) {
