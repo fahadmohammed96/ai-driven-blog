@@ -49,6 +49,7 @@ export default function EditorSurface() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
   // Read the item id from the query string (?id=…) on the client.
   useEffect(() => {
@@ -108,6 +109,26 @@ export default function EditorSurface() {
       setError(e instanceof Error ? e.message : "Errore inatteso");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Close the publish loop inside the new UI: walk the item through the state
+  // machine to `published` via the existing idempotent endpoint (the same one
+  // /studio calls). The agency model proposes → approves; this is the founder's
+  // final "confirm" that takes an item live, without leaving the Content Hub.
+  async function publish() {
+    if (!item || !id) return;
+    setPublishing(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API}/articles/${id}/publish`, { method: "POST" });
+      if (!res.ok) throw new Error(`Pubblicazione fallita (${res.status})`);
+      const result = (await res.json()) as { status: PublicationStatus; publishedAt: string | null };
+      setItem((cur) => (cur ? { ...cur, status: result.status, publishedAt: result.publishedAt } : cur));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore inatteso");
+    } finally {
+      setPublishing(false);
     }
   }
 
@@ -222,6 +243,35 @@ export default function EditorSurface() {
                 <span data-testid="save-status" style={{ color: color.approved, fontSize: font.size.sm }}>
                   Salvato
                 </span>
+              )}
+
+              <span style={{ flex: 1 }} />
+
+              {item.status === "published" ? (
+                <span
+                  data-testid="publish-status"
+                  style={{ color: color.published, fontSize: font.size.sm, fontWeight: 600 }}
+                >
+                  Pubblicato ✓
+                </span>
+              ) : (
+                <button
+                  data-testid="publish-button"
+                  onClick={publish}
+                  disabled={publishing}
+                  style={{
+                    fontSize: font.size.md,
+                    fontWeight: 600,
+                    padding: `${space.sm} ${space.lg}`,
+                    borderRadius: radius.sm,
+                    border: "none",
+                    background: color.published,
+                    color: "#fff",
+                    cursor: publishing ? "default" : "pointer",
+                  }}
+                >
+                  {publishing ? "Pubblicazione…" : "Pubblica"}
+                </button>
               )}
             </div>
           </div>

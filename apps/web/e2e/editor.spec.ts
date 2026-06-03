@@ -65,4 +65,26 @@ test.describe("block editor surface", () => {
     // The meter is still present as a persistent counterweight.
     await expect(page.getByTestId("authenticity-meter")).toBeVisible();
   });
+
+  test("publishes an item end-to-end from the editor, closing the loop", async ({ page }) => {
+    const { id } = await seedArticle();
+
+    await page.goto(`/editor?id=${id}`);
+    await expect(page.getByTestId("surface-editor")).toBeVisible();
+
+    // A freshly generated article is not yet published → the Publish action is offered.
+    const publishBtn = page.getByTestId("publish-button");
+    await expect(publishBtn).toBeVisible();
+    await publishBtn.click();
+
+    // The state machine walks it to `published`: the badge flips and a confirmation shows.
+    await expect(page.getByTestId("state-badge-published")).toBeVisible();
+    await expect(page.getByTestId("publish-status")).toBeVisible();
+
+    // Persisted server-side: reload from scratch and the published state holds; the
+    // Publish action is gone (publishing is terminal/idempotent).
+    await page.goto(`/editor?id=${id}`);
+    await expect(page.getByTestId("state-badge-published")).toBeVisible();
+    await expect(page.getByTestId("publish-button")).toHaveCount(0);
+  });
 });
