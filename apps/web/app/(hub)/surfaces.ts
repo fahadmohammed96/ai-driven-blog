@@ -80,6 +80,15 @@ export const SURFACES: Surface[] = [
     group: "create",
   },
   {
+    href: "/social",
+    label: "Social",
+    navTestId: "nav-social",
+    hint: "Genera i post social da un articolo e approvali prima che escano.",
+    icon: "📣",
+    accent: "#e11d48",
+    group: "grow",
+  },
+  {
     href: "/affiliates",
     label: "Affiliates",
     navTestId: "nav-affiliates",
