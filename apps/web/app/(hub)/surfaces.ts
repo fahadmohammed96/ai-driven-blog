@@ -44,6 +44,15 @@ export const HUB_HOME: Surface = {
 
 export const SURFACES: Surface[] = [
   {
+    href: "/create",
+    label: "Crea",
+    navTestId: "nav-create",
+    hint: "Crea un nuovo articolo da un viaggio e aprilo nel Block Editor.",
+    icon: "✨",
+    accent: "#9333ea",
+    group: "create",
+  },
+  {
     href: "/library",
     label: "Library",
     navTestId: "nav-library",
