@@ -116,6 +116,15 @@ export const SURFACES: Surface[] = [
     group: "grow",
   },
   {
+    href: "/channels",
+    label: "Canali",
+    navTestId: "nav-channels",
+    hint: "Collega Instagram e gli altri canali per pubblicare e gestire da qui.",
+    icon: "🔌",
+    accent: "#0ea5e9",
+    group: "operate",
+  },
+  {
     href: "/analytics",
     label: "Analytics",
     navTestId: "nav-analytics",

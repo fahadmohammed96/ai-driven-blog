@@ -15,6 +15,7 @@ import { CrmModule } from "./modules/crm";
 import { AnalyticsModule } from "./modules/analytics";
 import { FeedbackModule } from "./modules/feedback";
 import { OnboardingModule } from "./modules/onboarding";
+import { ChannelsModule } from "./modules/channels";
 import { OrchestratorModule } from "./modules/orchestrator/orchestrator.module";
 import { TravelModule } from "./verticals/travel/travel.module";
 
@@ -34,6 +35,7 @@ import { TravelModule } from "./verticals/travel/travel.module";
     AnalyticsModule,
     FeedbackModule,
     OnboardingModule,
+    ChannelsModule,
     OrchestratorModule,
     TravelModule,
   ],

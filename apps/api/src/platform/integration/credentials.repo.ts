@@ -54,6 +54,13 @@ export class DbCredentialStore implements CredentialStore {
         }),
     );
   }
+
+  /** Remove a tenant's credential for a connector (RLS-scoped). Idempotent. */
+  async delete(tenantId: string, connector: string): Promise<void> {
+    await withTenant(this.db, tenantId, (tx) =>
+      tx.delete(connectorCredentials).where(eq(connectorCredentials.connector, connector)),
+    );
+  }
 }
 
 /**
